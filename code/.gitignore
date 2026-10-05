@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+data/
+outputs/
+*.csv
+*.parquet
+*.npz
+*.npy
+
+kaggle.json
+.DS_Store

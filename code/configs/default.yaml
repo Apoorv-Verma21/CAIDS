@@ -1,0 +1,56 @@
+paths:
+  raw_csv: data/NF-UNSW-NB15-v3.csv
+  work_dir: outputs/work
+  results_dir: outputs/results
+
+data:
+  nrows: null
+  window_seconds: 60
+  drop_leaky: true
+  leaky_features:
+    - MIN_TTL
+    - MAX_TTL
+    - SRC_TO_DST_SECOND_BYTES
+    - DST_TO_SRC_SECOND_BYTES
+  min_flows_per_window: 2
+  max_windows: null
+
+split:
+  mode: chronological
+  train: 0.7
+  val: 0.1
+  test: 0.2
+  blocks: 10
+
+context:
+  use_structural: true
+  use_behavioural: true
+  use_role: true
+  use_time: false
+  ewma_alpha: 0.3
+  pagerank_iters: 30
+  pagerank_damping: 0.85
+
+model:
+  name: cagids
+  hidden_dim: 128
+  context_dim: 64
+  layers: 2
+  dropout: 0.2
+
+train:
+  epochs: 30
+  lr: 0.003
+  weight_decay: 0.00001
+  patience: 6
+  seed: 42
+  seeds: [42]
+  class_weighting: inverse
+  windows_per_batch: 8
+  device: auto
+
+baselines:
+  models: [random_forest, xgboost, mlp]
+  n_estimators: 200
+  max_depth: null
+  subsample_train: 400000
