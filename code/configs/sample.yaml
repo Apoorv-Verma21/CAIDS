@@ -1,0 +1,22 @@
+paths:
+  raw_csv: data/sample_flows.csv
+  work_dir: outputs/work_sample
+  results_dir: outputs/results_sample
+
+data:
+  nrows: null
+  window_seconds: 60
+  drop_leaky: true
+  min_flows_per_window: 2
+  max_windows: null
+
+train:
+  epochs: 5
+  patience: 3
+  windows_per_batch: 4
+  device: cpu
+
+baselines:
+  models: [random_forest]
+  n_estimators: 50
+  subsample_train: 20000
