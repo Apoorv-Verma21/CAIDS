@@ -1,0 +1,2372 @@
+{
+ "dataset": {
+  "caption": "Class composition of NF-UNSW-NB15-v3 under the chronological split",
+  "colWidths": [
+   2.2,
+   2.6,
+   1.7,
+   1.7,
+   1.4
+  ],
+  "header": [
+   [
+    "Class",
+    "Train",
+    "Validation",
+    "Test",
+    "Total"
+   ]
+  ],
+  "rows": [
+   [
+    "Benign",
+    "1,544,338",
+    "222,833",
+    "470,558",
+    "2,237,729"
+   ],
+   [
+    "Analysis",
+    "646",
+    "136",
+    "444",
+    "1,226"
+   ],
+   [
+    "Backdoor",
+    "3,241",
+    "112",
+    "1,306",
+    "4,659"
+   ],
+   [
+    "DoS",
+    "3,002",
+    "900",
+    "2,078",
+    "5,980"
+   ],
+   [
+    "Exploits",
+    "19,453",
+    "7,846",
+    "15,449",
+    "42,748"
+   ],
+   [
+    "Fuzzers",
+    "16,588",
+    "6,135",
+    "11,093",
+    "33,816"
+   ],
+   [
+    "Generic",
+    "8,396",
+    "3,613",
+    "7,642",
+    "19,651"
+   ],
+   [
+    "Reconnaissance",
+    "7,679",
+    "2,998",
+    "6,397",
+    "17,074"
+   ],
+   [
+    "Shellcode",
+    "1,339",
+    "389",
+    "653",
+    "2,381"
+   ],
+   [
+    "Worms",
+    "73",
+    "32",
+    "53",
+    "158"
+   ],
+   [
+    "Total flows",
+    "1,604,755",
+    "244,994",
+    "515,673",
+    "2,365,422"
+   ],
+   [
+    "Windows (60 s)",
+    "1,024",
+    "146",
+    "294",
+    "1,464"
+   ],
+   [
+    "Period (UTC, 2015)",
+    "22 Jan 11:49 to 18 Feb 05:09",
+    "18 Feb 05:09 to 07:35",
+    "18 Feb 07:35 to 12:29",
+    ""
+   ]
+  ],
+  "midRules": [
+   9
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "right",
+   "right",
+   "right",
+   "right"
+  ],
+  "notes": "Windows with fewer than two flows are dropped (two flows in total). Training, validation and test are the first 70%, the next 10% and the last 20% of the non-empty 60-s windows in time order."
+ },
+ "features": {
+  "caption": "Use of the NetFlow fields of NF-UNSW-NB15-v3",
+  "colWidths": [
+   2.6,
+   0.8,
+   5.6
+  ],
+  "header": [
+   [
+    "Group",
+    "Fields",
+    "Use"
+   ]
+  ],
+  "rows": [
+   [
+    "Endpoints and time",
+    "6",
+    "Build the window graphs and the host context; never part of the flow vector (addresses, ports, start and end timestamps)"
+   ],
+   [
+    "Labels",
+    "2",
+    "Targets only (Label, Attack)"
+   ],
+   [
+    "Excluded shortcut fields",
+    "4",
+    "Removed from all models, kept for the audit: MIN_TTL, MAX_TTL and the two per-second byte rates"
+   ],
+   [
+    "Retained numeric fields",
+    "43",
+    "Flow vector; 32 heavy-tailed fields transformed with log(1 + *x*)"
+   ],
+   [
+    "Protocol indicators",
+    "3",
+    "Flow vector; TCP, UDP and ICMP indicators derived from PROTOCOL"
+   ],
+   [
+    "Flow vector **e**_{*f*}",
+    "46",
+    "Standardised with training-period means and deviations"
+   ]
+  ],
+  "midRules": [
+   4
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "center",
+   "left"
+  ],
+  "notes": "Categorical codes (L7_PROTO, ICMP_TYPE, DNS_QUERY_TYPE, FTP_COMMAND_RET_CODE) and DNS_QUERY_ID are retained as numeric values, as in the released feature set."
+ },
+ "variants": {
+  "caption": "Model variants. All share one implementation, the training loop and the loss",
+  "colWidths": [
+   2.9,
+   2.5,
+   1.5,
+   2.1,
+   1.3
+  ],
+  "header": [
+   [
+    "Variant",
+    "Node initialisation",
+    "Fusion",
+    "Backbone",
+    "Parameters"
+   ]
+  ],
+  "rows": [
+   [
+    {
+     "text": "Flow-only MLP (B2)",
+     "bold": false
+    },
+    "none (no graph)",
+    "none",
+    "none",
+    "23,818"
+   ],
+   [
+    {
+     "text": "E-GraphSAGE-style (B3)",
+     "bold": false
+    },
+    "constant vector",
+    "none",
+    "mean, *K* = 2",
+    "150,666"
+   ],
+   [
+    {
+     "text": "Centrality-initialised (B4)",
+     "bold": false
+    },
+    "C1 only, encoded",
+    "none",
+    "mean, *K* = 2",
+    "143,306"
+   ],
+   [
+    {
+     "text": "CAG-IDS, concatenation",
+     "bold": false
+    },
+    "C1 + C2 + C3, encoded",
+    "concatenation",
+    "mean, *K* = 2",
+    "161,226"
+   ],
+   [
+    {
+     "text": "CAG-IDS (proposed)",
+     "bold": true
+    },
+    "C1 + C2 + C3, encoded",
+    "gate",
+    "mean, *K* = 2",
+    "177,866"
+   ],
+   [
+    {
+     "text": "CAG-IDS, GATv2",
+     "bold": false
+    },
+    "C1 + C2 + C3, encoded",
+    "gate",
+    "GATv2, 4 heads, *K* = 2",
+    "202,698"
+   ],
+   [
+    {
+     "text": "C1 + gate (control)",
+     "bold": false
+    },
+    "C1 only, encoded",
+    "gate",
+    "mean, *K* = 2",
+    "176,330"
+   ],
+   [
+    {
+     "text": "Context-only probe",
+     "bold": false
+    },
+    "C1 + C2 + C3, encoded",
+    "none",
+    "none (*K* = 0)",
+    "28,362"
+   ]
+  ],
+  "midRules": [
+   5
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "left",
+   "center",
+   "center",
+   "right"
+  ],
+  "notes": "All graph variants pass the standardised flow vector to the classifier as an additional input, except the context-only probe, which sees only the two encoded endpoint contexts. The C1 + gate control is gated CAG-IDS trained on graphs whose context contains only C1. Parameter counts are computed from the model definitions for the 46 flow features and the 10 classes."
+ },
+ "diagnostics": {
+  "caption": "Shortcut and information probes on the chronological test split",
+  "colWidths": [
+   4.4,
+   1.6,
+   1.4,
+   1.1,
+   1.1
+  ],
+  "header": [
+   [
+    "Probe",
+    "Macro-F1",
+    "Attack macro-F1",
+    "Binary F1",
+    "FPR"
+   ]
+  ],
+  "rows": [
+   [
+    "Source address only",
+    "0.151",
+    "0.057",
+    "1.000",
+    "0.0000"
+   ],
+   [
+    "Destination address only",
+    "0.173",
+    "0.081",
+    "1.000",
+    "0.0000"
+   ],
+   [
+    "Destination port only",
+    "0.216",
+    "0.132",
+    "0.575",
+    "0.0003"
+   ],
+   [
+    "Address pair",
+    "0.177",
+    "0.085",
+    "1.000",
+    "0.0000"
+   ],
+   [
+    "Address pair and destination port",
+    "0.326",
+    "0.253",
+    "0.897",
+    "0.0000"
+   ],
+   [
+    "MIN_TTL (excluded)",
+    "0.156",
+    "0.062",
+    "0.999",
+    "0.0000"
+   ],
+   [
+    "MAX_TTL (excluded)",
+    "0.166",
+    "0.073",
+    "0.998",
+    "0.0002"
+   ],
+   [
+    "SRC_TO_DST_SECOND_BYTES (excluded)",
+    "0.160",
+    "0.082",
+    "0.424",
+    "0.2426"
+   ],
+   [
+    "DST_TO_SRC_SECOND_BYTES (excluded)",
+    "0.123",
+    "0.046",
+    "0.364",
+    "0.3010"
+   ],
+   [
+    "SHORTEST_FLOW_PKT (retained)",
+    "0.240",
+    "0.157",
+    "0.877",
+    "0.0230"
+   ],
+   [
+    "IN_BYTES (retained)",
+    "0.237",
+    "0.169",
+    "0.394",
+    "0.2462"
+   ],
+   [
+    "SRC_TO_DST_AVG_THROUGHPUT (retained)",
+    "0.206",
+    "0.144",
+    "0.312",
+    "0.3684"
+   ],
+   [
+    "RF on endpoint context only",
+    "0.264 ± 0.003",
+    "0.182",
+    "1.000",
+    "0.0000"
+   ],
+   [
+    "RF on flow features only",
+    "0.579 ± 0.002",
+    "0.532",
+    "0.999",
+    "0.0001"
+   ],
+   [
+    "RF on flow features and endpoint context",
+    "0.529 ± 0.005",
+    "0.476",
+    "1.000",
+    "0.0000"
+   ]
+  ],
+  "midRules": [
+   4,
+   11
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "Identity probes predict the majority training class of each key (unseen keys: Benign). Single-feature probes are depth-6 decision trees trained on all training attack flows and 300,000 benign training flows. Context probes are 200-tree random forests trained on the same 400,000-flow subsample as B1 (mean ± SD over three seeds). Attack macro-F1 averages the nine attack classes; binary F1 treats all attack classes as one."
+ },
+ "main": {
+  "caption": "Detection performance on the chronological test split (mean ± SD over five seeds)",
+  "colWidths": [
+   2.75,
+   1.45,
+   1.45,
+   1.45,
+   1.45,
+   1.2,
+   1.45
+  ],
+  "header": [
+   [
+    "Model",
+    "Macro-F1",
+    "Attack macro-F1",
+    "Weighted F1",
+    "Binary F1",
+    "FPR (%)",
+    "AP"
+   ]
+  ],
+  "rows": [
+   [
+    {
+     "text": "Random forest (B1)",
+     "bold": false
+    },
+    {
+     "text": "0.579 ± 0.001",
+     "bold": true
+    },
+    {
+     "text": "0.532 ± 0.002",
+     "bold": true
+    },
+    "0.972 ± 0.000",
+    "0.999 ± 0.000",
+    "0.01 ± 0.00",
+    "1.000 ± 0.000"
+   ],
+   [
+    {
+     "text": "XGBoost (B1)",
+     "bold": false
+    },
+    {
+     "text": "0.571 ± 0.004",
+     "bold": false
+    },
+    {
+     "text": "0.523 ± 0.005",
+     "bold": false
+    },
+    "0.970 ± 0.000",
+    "0.999 ± 0.000",
+    "0.01 ± 0.00",
+    "1.000 ± 0.000"
+   ],
+   [
+    {
+     "text": "Flow-only MLP (B2)",
+     "bold": false
+    },
+    {
+     "text": "0.463 ± 0.015",
+     "bold": false
+    },
+    {
+     "text": "0.403 ± 0.017",
+     "bold": false
+    },
+    "0.965 ± 0.002",
+    "0.992 ± 0.006",
+    "0.15 ± 0.12",
+    "0.997 ± 0.001"
+   ],
+   [
+    {
+     "text": "E-GraphSAGE-style GNN (B3)",
+     "bold": false
+    },
+    {
+     "text": "0.423 ± 0.029",
+     "bold": false
+    },
+    {
+     "text": "0.359 ± 0.032",
+     "bold": false
+    },
+    "0.959 ± 0.007",
+    "0.968 ± 0.043",
+    "0.67 ± 0.94",
+    "0.991 ± 0.010"
+   ],
+   [
+    {
+     "text": "Centrality-initialised GNN (B4)",
+     "bold": false
+    },
+    {
+     "text": "0.454 ± 0.031",
+     "bold": false
+    },
+    {
+     "text": "0.393 ± 0.035",
+     "bold": false
+    },
+    "0.963 ± 0.003",
+    "0.990 ± 0.009",
+    "0.19 ± 0.17",
+    "0.996 ± 0.001"
+   ],
+   [
+    {
+     "text": "CAG-IDS, concatenation",
+     "bold": false
+    },
+    {
+     "text": "0.439 ± 0.011",
+     "bold": false
+    },
+    {
+     "text": "0.376 ± 0.012",
+     "bold": false
+    },
+    "0.962 ± 0.002",
+    "0.991 ± 0.006",
+    "0.17 ± 0.12",
+    "0.995 ± 0.002"
+   ],
+   [
+    {
+     "text": "CAG-IDS, gated (proposed)",
+     "bold": true
+    },
+    {
+     "text": "0.443 ± 0.004",
+     "bold": false
+    },
+    {
+     "text": "0.381 ± 0.004",
+     "bold": false
+    },
+    "0.963 ± 0.001",
+    "0.993 ± 0.004",
+    "0.14 ± 0.07",
+    "0.996 ± 0.001"
+   ],
+   [
+    {
+     "text": "CAG-IDS, gated, GATv2",
+     "bold": false
+    },
+    {
+     "text": "0.439 ± 0.010",
+     "bold": false
+    },
+    {
+     "text": "0.377 ± 0.011",
+     "bold": false
+    },
+    "0.962 ± 0.001",
+    "0.991 ± 0.004",
+    "0.17 ± 0.07",
+    "0.996 ± 0.001"
+   ]
+  ],
+  "midRules": [
+   1,
+   2
+  ],
+  "fontSize": 16,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "Macro-F1 averages the ten classes present in the test period; attack macro-F1 averages the nine attack classes. FPR: share of benign test flows assigned to any attack class. AP: average precision of the attack score defined in [sec:metrics]. Bold: best mean in the column."
+ },
+ "rareclass": {
+  "caption": "Precision / recall of the five weakest attack classes on the chronological test split (mean over five seeds)",
+  "colWidths": [
+   2.2,
+   2.0,
+   2.0,
+   2.0,
+   1.4
+  ],
+  "header": [
+   [
+    "Class",
+    "Random forest",
+    "Flow-only MLP (B2)",
+    "CAG-IDS, gated",
+    "Test flows"
+   ]
+  ],
+  "rows": [
+   [
+    "Analysis",
+    "0.236 / 0.372",
+    "0.201 / 0.984",
+    "0.264 / 0.751",
+    "444"
+   ],
+   [
+    "Backdoor",
+    "0.028 / 0.071",
+    "0.063 / 0.030",
+    "0.016 / 0.026",
+    "1,306"
+   ],
+   [
+    "DoS",
+    "0.500 / 0.251",
+    "0.148 / 0.278",
+    "0.146 / 0.269",
+    "2,078"
+   ],
+   [
+    "Shellcode",
+    "0.444 / 0.705",
+    "0.173 / 0.673",
+    "0.116 / 0.479",
+    "653"
+   ],
+   [
+    "Worms",
+    "0.582 / 0.736",
+    "0.064 / 0.834",
+    "0.033 / 0.785",
+    "53"
+   ]
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "right"
+  ],
+  "notes": "The neural models are trained with the inverse-frequency class weights of Eq. [eq:class_weight], which weight a Worms flow about {{weight_ratio_worms_benign}} times as heavily as a benign flow."
+ },
+ "perclass": {
+  "caption": "Per-class F1 on the chronological test split (mean over five seeds)",
+  "colWidths": [
+   2.1,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   1.15
+  ],
+  "header": [
+   [
+    "Class",
+    "RF",
+    "XGB",
+    "B2",
+    "B3",
+    "B4",
+    "Concat.",
+    "Gated",
+    "GATv2",
+    "Test flows"
+   ]
+  ],
+  "rows": [
+   [
+    "Benign",
+    {
+     "text": "1.000",
+     "bold": true
+    },
+    {
+     "text": "1.000",
+     "bold": false
+    },
+    {
+     "text": "0.999",
+     "bold": false
+    },
+    {
+     "text": "0.997",
+     "bold": false
+    },
+    {
+     "text": "0.999",
+     "bold": false
+    },
+    {
+     "text": "0.999",
+     "bold": false
+    },
+    {
+     "text": "0.999",
+     "bold": false
+    },
+    {
+     "text": "0.999",
+     "bold": false
+    },
+    "470,558"
+   ],
+   [
+    "Analysis",
+    {
+     "text": "0.289",
+     "bold": false
+    },
+    {
+     "text": "0.364",
+     "bold": false
+    },
+    {
+     "text": "0.334",
+     "bold": false
+    },
+    {
+     "text": "0.347",
+     "bold": false
+    },
+    {
+     "text": "0.379",
+     "bold": false
+    },
+    {
+     "text": "0.405",
+     "bold": true
+    },
+    {
+     "text": "0.390",
+     "bold": false
+    },
+    {
+     "text": "0.391",
+     "bold": false
+    },
+    "444"
+   ],
+   [
+    "Backdoor",
+    {
+     "text": "0.040",
+     "bold": false
+    },
+    {
+     "text": "0.041",
+     "bold": true
+    },
+    {
+     "text": "0.033",
+     "bold": false
+    },
+    {
+     "text": "0.010",
+     "bold": false
+    },
+    {
+     "text": "0.028",
+     "bold": false
+    },
+    {
+     "text": "0.016",
+     "bold": false
+    },
+    {
+     "text": "0.016",
+     "bold": false
+    },
+    {
+     "text": "0.009",
+     "bold": false
+    },
+    "1,306"
+   ],
+   [
+    "DoS",
+    {
+     "text": "0.334",
+     "bold": true
+    },
+    {
+     "text": "0.333",
+     "bold": false
+    },
+    {
+     "text": "0.187",
+     "bold": false
+    },
+    {
+     "text": "0.191",
+     "bold": false
+    },
+    {
+     "text": "0.199",
+     "bold": false
+    },
+    {
+     "text": "0.184",
+     "bold": false
+    },
+    {
+     "text": "0.188",
+     "bold": false
+    },
+    {
+     "text": "0.185",
+     "bold": false
+    },
+    "2,078"
+   ],
+   [
+    "Exploits",
+    {
+     "text": "0.743",
+     "bold": true
+    },
+    {
+     "text": "0.692",
+     "bold": false
+    },
+    {
+     "text": "0.598",
+     "bold": false
+    },
+    {
+     "text": "0.582",
+     "bold": false
+    },
+    {
+     "text": "0.561",
+     "bold": false
+    },
+    {
+     "text": "0.539",
+     "bold": false
+    },
+    {
+     "text": "0.577",
+     "bold": false
+    },
+    {
+     "text": "0.542",
+     "bold": false
+    },
+    "15,449"
+   ],
+   [
+    "Fuzzers",
+    {
+     "text": "0.667",
+     "bold": true
+    },
+    {
+     "text": "0.644",
+     "bold": false
+    },
+    {
+     "text": "0.652",
+     "bold": false
+    },
+    {
+     "text": "0.608",
+     "bold": false
+    },
+    {
+     "text": "0.660",
+     "bold": false
+    },
+    {
+     "text": "0.646",
+     "bold": false
+    },
+    {
+     "text": "0.646",
+     "bold": false
+    },
+    {
+     "text": "0.658",
+     "bold": false
+    },
+    "11,093"
+   ],
+   [
+    "Generic",
+    {
+     "text": "0.861",
+     "bold": true
+    },
+    {
+     "text": "0.859",
+     "bold": false
+    },
+    {
+     "text": "0.814",
+     "bold": false
+    },
+    {
+     "text": "0.712",
+     "bold": false
+    },
+    {
+     "text": "0.788",
+     "bold": false
+    },
+    {
+     "text": "0.801",
+     "bold": false
+    },
+    {
+     "text": "0.800",
+     "bold": false
+    },
+    {
+     "text": "0.800",
+     "bold": false
+    },
+    "7,642"
+   ],
+   [
+    "Reconnaissance",
+    {
+     "text": "0.661",
+     "bold": false
+    },
+    {
+     "text": "0.665",
+     "bold": true
+    },
+    {
+     "text": "0.617",
+     "bold": false
+    },
+    {
+     "text": "0.560",
+     "bold": false
+    },
+    {
+     "text": "0.589",
+     "bold": false
+    },
+    {
+     "text": "0.548",
+     "bold": false
+    },
+    {
+     "text": "0.565",
+     "bold": false
+    },
+    {
+     "text": "0.554",
+     "bold": false
+    },
+    "6,397"
+   ],
+   [
+    "Shellcode",
+    {
+     "text": "0.545",
+     "bold": true
+    },
+    {
+     "text": "0.419",
+     "bold": false
+    },
+    {
+     "text": "0.275",
+     "bold": false
+    },
+    {
+     "text": "0.165",
+     "bold": false
+    },
+    {
+     "text": "0.270",
+     "bold": false
+    },
+    {
+     "text": "0.191",
+     "bold": false
+    },
+    {
+     "text": "0.186",
+     "bold": false
+    },
+    {
+     "text": "0.205",
+     "bold": false
+    },
+    "653"
+   ],
+   [
+    "Worms",
+    {
+     "text": "0.650",
+     "bold": false
+    },
+    {
+     "text": "0.691",
+     "bold": true
+    },
+    {
+     "text": "0.117",
+     "bold": false
+    },
+    {
+     "text": "0.053",
+     "bold": false
+    },
+    {
+     "text": "0.067",
+     "bold": false
+    },
+    {
+     "text": "0.057",
+     "bold": false
+    },
+    {
+     "text": "0.064",
+     "bold": false
+    },
+    {
+     "text": "0.048",
+     "bold": false
+    },
+    "53"
+   ]
+  ],
+  "fontSize": 16,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "right"
+  ],
+  "notes": "RF random forest, XGB XGBoost (both B1), B2 flow-only MLP, B3 E-GraphSAGE-style GNN, B4 centrality-initialised GNN, Concat. and Gated the two CAG-IDS fusions, GATv2 gated CAG-IDS with the attention backbone. Bold: best in the row."
+ },
+ "confusion": {
+  "caption": "Row-normalised confusion matrix of the random forest on the chronological test split (%, mean over five seeds)",
+  "colWidths": [
+   2.4,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95,
+   0.95
+  ],
+  "header": [
+   [
+    "True class",
+    "Ben.",
+    "Ana.",
+    "Bkd.",
+    "DoS",
+    "Exp.",
+    "Fuz.",
+    "Gen.",
+    "Rec.",
+    "Shc.",
+    "Wor."
+   ]
+  ],
+  "rows": [
+   [
+    "Benign",
+    {
+     "text": "100.0",
+     "bold": true
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    }
+   ],
+   [
+    "Analysis",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "37.2",
+     "bold": true
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "2.7",
+     "bold": false
+    },
+    {
+     "text": "57.0",
+     "bold": false
+    },
+    {
+     "text": "0.5",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "2.5",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    }
+   ],
+   [
+    "Backdoor",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0.1",
+     "bold": false
+    },
+    {
+     "text": "7.1",
+     "bold": true
+    },
+    {
+     "text": "1.8",
+     "bold": false
+    },
+    {
+     "text": "30.7",
+     "bold": false
+    },
+    {
+     "text": "24.2",
+     "bold": false
+    },
+    {
+     "text": "21.3",
+     "bold": false
+    },
+    {
+     "text": "12.9",
+     "bold": false
+    },
+    {
+     "text": "1.7",
+     "bold": false
+    },
+    {
+     "text": "0.3",
+     "bold": false
+    }
+   ],
+   [
+    "DoS",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "1.3",
+     "bold": false
+    },
+    {
+     "text": "8.3",
+     "bold": false
+    },
+    {
+     "text": "25.1",
+     "bold": true
+    },
+    {
+     "text": "36.7",
+     "bold": false
+    },
+    {
+     "text": "21.0",
+     "bold": false
+    },
+    {
+     "text": "2.0",
+     "bold": false
+    },
+    {
+     "text": "3.8",
+     "bold": false
+    },
+    {
+     "text": "1.6",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    }
+   ],
+   [
+    "Exploits",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "2.0",
+     "bold": false
+    },
+    {
+     "text": "4.7",
+     "bold": false
+    },
+    {
+     "text": "1.5",
+     "bold": false
+    },
+    {
+     "text": "72.0",
+     "bold": true
+    },
+    {
+     "text": "13.0",
+     "bold": false
+    },
+    {
+     "text": "1.6",
+     "bold": false
+    },
+    {
+     "text": "3.8",
+     "bold": false
+    },
+    {
+     "text": "1.3",
+     "bold": false
+    },
+    {
+     "text": "0.1",
+     "bold": false
+    }
+   ],
+   [
+    "Fuzzers",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0.8",
+     "bold": false
+    },
+    {
+     "text": "18.0",
+     "bold": false
+    },
+    {
+     "text": "1.1",
+     "bold": false
+    },
+    {
+     "text": "6.2",
+     "bold": false
+    },
+    {
+     "text": "70.4",
+     "bold": true
+    },
+    {
+     "text": "0.6",
+     "bold": false
+    },
+    {
+     "text": "2.3",
+     "bold": false
+    },
+    {
+     "text": "0.5",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    }
+   ],
+   [
+    "Generic",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0.2",
+     "bold": false
+    },
+    {
+     "text": "0.9",
+     "bold": false
+    },
+    {
+     "text": "0.7",
+     "bold": false
+    },
+    {
+     "text": "4.1",
+     "bold": false
+    },
+    {
+     "text": "8.1",
+     "bold": false
+    },
+    {
+     "text": "83.3",
+     "bold": true
+    },
+    {
+     "text": "2.1",
+     "bold": false
+    },
+    {
+     "text": "0.6",
+     "bold": false
+    },
+    {
+     "text": "0.1",
+     "bold": false
+    }
+   ],
+   [
+    "Reconnaissance",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "1.5",
+     "bold": false
+    },
+    {
+     "text": "3.4",
+     "bold": false
+    },
+    {
+     "text": "1.1",
+     "bold": false
+    },
+    {
+     "text": "13.5",
+     "bold": false
+    },
+    {
+     "text": "16.1",
+     "bold": false
+    },
+    {
+     "text": "1.9",
+     "bold": false
+    },
+    {
+     "text": "59.1",
+     "bold": true
+    },
+    {
+     "text": "3.3",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    }
+   ],
+   [
+    "Shellcode",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "4.8",
+     "bold": false
+    },
+    {
+     "text": "0.8",
+     "bold": false
+    },
+    {
+     "text": "7.4",
+     "bold": false
+    },
+    {
+     "text": "14.0",
+     "bold": false
+    },
+    {
+     "text": "1.9",
+     "bold": false
+    },
+    {
+     "text": "0.6",
+     "bold": false
+    },
+    {
+     "text": "70.5",
+     "bold": true
+    },
+    {
+     "text": "0",
+     "bold": false
+    }
+   ],
+   [
+    "Worms",
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "1.9",
+     "bold": false
+    },
+    {
+     "text": "22.6",
+     "bold": false
+    },
+    {
+     "text": "1.9",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "0",
+     "bold": false
+    },
+    {
+     "text": "73.6",
+     "bold": true
+    }
+   ]
+  ],
+  "fontSize": 16,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "Each row shows how the test flows of one true class are distributed over the predicted classes; diagonal entries (bold) are recalls."
+ },
+ "significance": {
+  "caption": "Paired differences in macro-F1, with 95% moving-block bootstrap intervals",
+  "colWidths": [
+   4.4,
+   1.2,
+   1.9,
+   1.3,
+   1.9
+  ],
+  "header": [
+   [
+    "Comparison (A − B)",
+    "Δ macro-F1",
+    "95% interval",
+    "Δ attack macro-F1",
+    "95% interval"
+   ]
+  ],
+  "rows": [
+   [
+    "Gated CAG-IDS − E-GraphSAGE-style (H1)",
+    "+0.021",
+    "[+0.008, +0.030]",
+    "+0.023",
+    "[+0.009, +0.033]"
+   ],
+   [
+    "Gated CAG-IDS − centrality-initialised (H1)",
+    "−0.011",
+    "[−0.021, −0.004]",
+    "−0.012",
+    "[−0.024, −0.005]"
+   ],
+   [
+    "Gate − concatenation (H3)",
+    "+0.004",
+    "[−0.000, +0.010]",
+    "+0.005",
+    "[−0.000, +0.011]"
+   ],
+   [
+    "Gated CAG-IDS − C1 + gate control",
+    "−0.000",
+    "[−0.008, +0.005]",
+    "−0.000",
+    "[−0.009, +0.005]"
+   ],
+   [
+    "C1 + gate control − centrality-initialised",
+    "−0.011",
+    "[−0.017, −0.004]",
+    "−0.012",
+    "[−0.019, −0.005]"
+   ],
+   [
+    "GATv2 − mean aggregation (both gated)",
+    "−0.004",
+    "[−0.010, +0.002]",
+    "−0.004",
+    "[−0.011, +0.003]"
+   ],
+   [
+    "E-GraphSAGE-style − flow-only MLP",
+    "−0.040",
+    "[−0.051, −0.033]",
+    "−0.044",
+    "[−0.057, −0.036]"
+   ],
+   [
+    "Centrality-initialised − flow-only MLP",
+    "−0.009",
+    "[−0.018, −0.002]",
+    "−0.010",
+    "[−0.020, −0.002]"
+   ],
+   [
+    "Gated CAG-IDS − flow-only MLP",
+    "−0.020",
+    "[−0.033, −0.011]",
+    "−0.022",
+    "[−0.036, −0.012]"
+   ],
+   [
+    "Gated CAG-IDS − random forest",
+    "−0.136",
+    "[−0.159, −0.116]",
+    "−0.151",
+    "[−0.177, −0.129]"
+   ],
+   [
+    "Gated CAG-IDS − flow-only MLP, random flow split",
+    "+0.036",
+    "[+0.014, +0.050]",
+    "+0.040",
+    "[+0.015, +0.056]"
+   ],
+   [
+    "Gated CAG-IDS − centrality-initialised, random flow split",
+    "+0.035",
+    "[+0.014, +0.048]",
+    "+0.038",
+    "[+0.016, +0.053]"
+   ]
+  ],
+  "midRules": [
+   2,
+   5,
+   9
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "Δ is the seed-averaged score of model A minus that of model B, on the chronological test split except in the last two rows, which use the test flows of the random flow split. Blocks of ten consecutive test windows (10 min) are resampled 2,000 times. An interval that lies entirely above zero supports A."
+ },
+ "ablation": {
+  "caption": "Context-group ablation for gated CAG-IDS on the chronological split (mean over five seeds)",
+  "colWidths": [
+   3.0,
+   1.45,
+   1.45,
+   0.75,
+   0.75,
+   0.75,
+   0.75,
+   1.35,
+   0.75
+  ],
+  "header": [
+   [
+    "Context used",
+    "Macro-F1",
+    "Attack macro-F1",
+    "Ana.",
+    "Bkd.",
+    "Shc.",
+    "Wor.",
+    "Low-volume mean",
+    "Rec."
+   ]
+  ],
+  "rows": [
+   [
+    "Full context (C1 + C2 + C3)",
+    "0.443 ± 0.004",
+    "0.381 ± 0.004",
+    "0.390",
+    "0.016",
+    "0.186",
+    "0.064",
+    "0.164 ± 0.009",
+    "0.565"
+   ],
+   [
+    "without C1 (structural)",
+    "0.430 ± 0.035",
+    "0.367 ± 0.038",
+    "0.382",
+    "0.012",
+    "0.161",
+    "0.059",
+    "0.154 ± 0.023",
+    "0.565"
+   ],
+   [
+    "without C2 (behavioural)",
+    "0.443 ± 0.005",
+    "0.381 ± 0.006",
+    "0.355",
+    "0.022",
+    "0.185",
+    "0.075",
+    "0.159 ± 0.015",
+    "0.574"
+   ],
+   [
+    "without C3 (role)",
+    "0.436 ± 0.010",
+    "0.373 ± 0.011",
+    "0.390",
+    "0.022",
+    "0.177",
+    "0.059",
+    "0.162 ± 0.007",
+    "0.557"
+   ],
+   [
+    "C1 only (C1 + gate control)",
+    "0.443 ± 0.014",
+    "0.382 ± 0.016",
+    "0.387",
+    "0.032",
+    "0.192",
+    "0.066",
+    "0.169 ± 0.020",
+    "0.570"
+   ],
+   [
+    "with C4 (time of day)",
+    "0.439 ± 0.018",
+    "0.377 ± 0.020",
+    "0.389",
+    "0.024",
+    "0.186",
+    "0.056",
+    "0.163 ± 0.021",
+    "0.561"
+   ]
+  ],
+  "midRules": [
+   0,
+   4
+  ],
+  "fontSize": 16,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "Ana., Bkd., Shc. and Wor. give the mean F1 of Analysis, Backdoor, Shellcode and Worms, the low-volume classes named in H2; the low-volume mean averages them per seed (mean ± SD). Reconnaissance (Rec.) is reported separately. Every row uses the same architecture, training and seeds; only the context groups differ."
+ },
+ "protocol": {
+  "caption": "Macro-F1 under a random flow split and under the chronological split, each on its own test set",
+  "colWidths": [
+   3.6,
+   2.0,
+   2.0,
+   1.2
+  ],
+  "header": [
+   [
+    "Model",
+    "Random flow split",
+    "Chronological split",
+    "Gap"
+   ]
+  ],
+  "rows": [
+   [
+    "Random forest",
+    "0.633 ± 0.003",
+    "0.579 ± 0.001",
+    "+0.054"
+   ],
+   [
+    "XGBoost",
+    "0.638 ± 0.001",
+    "0.571 ± 0.004",
+    "+0.068"
+   ],
+   [
+    "Flow-only MLP (B2)",
+    "0.508 ± 0.010",
+    "0.463 ± 0.015",
+    "+0.045"
+   ],
+   [
+    "E-GraphSAGE-style GNN (B3)",
+    "0.485 ± 0.013",
+    "0.423 ± 0.029",
+    "+0.063"
+   ],
+   [
+    "Centrality-initialised GNN (B4)",
+    "0.509 ± 0.012",
+    "0.454 ± 0.031",
+    "+0.055"
+   ],
+   [
+    "CAG-IDS, concatenation",
+    "0.549 ± 0.009",
+    "0.439 ± 0.011",
+    "+0.110"
+   ],
+   [
+    "CAG-IDS, gated",
+    "0.544 ± 0.019",
+    "0.443 ± 0.004",
+    "+0.101"
+   ]
+  ],
+  "midRules": [
+   1
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "The random split assigns flows, stratified by class, to training, validation and test (70/10/20), while every window graph keeps all of its flows. Context is computed in the same window-causal way in both cases. The two protocols are scored on different test sets; Table [#tab:sameflow] removes this difference."
+ },
+ "sameflow": {
+  "caption": "Random-split and chronological models scored on the same flows",
+  "colWidths": [
+   3.6,
+   1.6,
+   1.6,
+   1.1,
+   1.9
+  ],
+  "header": [
+   [
+    "Model",
+    "Trained on random split",
+    "Trained chronologically",
+    "Difference",
+    "95% interval"
+   ]
+  ],
+  "rows": [
+   [
+    "Random forest",
+    "0.616",
+    "0.583",
+    "+0.033",
+    "[+0.010, +0.065]"
+   ],
+   [
+    "XGBoost",
+    "0.611",
+    "0.571",
+    "+0.040",
+    "[+0.021, +0.064]"
+   ],
+   [
+    "Flow-only MLP (B2)",
+    "0.491",
+    "0.460",
+    "+0.031",
+    "[+0.025, +0.049]"
+   ],
+   [
+    "E-GraphSAGE-style GNN (B3)",
+    "0.462",
+    "0.421",
+    "+0.041",
+    "[+0.033, +0.051]"
+   ],
+   [
+    "Centrality-initialised GNN (B4)",
+    "0.493",
+    "0.450",
+    "+0.043",
+    "[+0.036, +0.052]"
+   ],
+   [
+    "CAG-IDS, concatenation",
+    "0.515",
+    "0.434",
+    "+0.081",
+    "[+0.059, +0.102]"
+   ],
+   [
+    "CAG-IDS, gated",
+    "0.507",
+    "0.439",
+    "+0.068",
+    "[+0.055, +0.086]"
+   ]
+  ],
+  "midRules": [
+   1
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "Macro-F1 (seed mean) on the 103,353 flows that belong to both test sets, that is, the random-split test flows that fall in the chronological test period (9,024 attack flows in 294 windows). Intervals come from the moving-block bootstrap over those windows."
+ },
+ "contexttests": {
+  "caption": "Random-forest probes that separate the explanations for the effect of endpoint context (mean over three seeds)",
+  "colWidths": [
+   3.9,
+   1.6,
+   1.6,
+   1.4,
+   1.5
+  ],
+  "header": [
+   [
+    "Inputs",
+    "Split",
+    "Macro-F1",
+    "Attack macro-F1",
+    "Context share of importance"
+   ]
+  ],
+  "rows": [
+   [
+    "Flow features only",
+    "Chronological",
+    "0.579 ± 0.002",
+    "0.532",
+    "–"
+   ],
+   [
+    "Flow features + endpoint context",
+    "Chronological",
+    "0.529 ± 0.005",
+    "0.476",
+    "0.42"
+   ],
+   [
+    "Flow features + shuffled context",
+    "Chronological",
+    "0.569 ± 0.001",
+    "0.521",
+    "0.25"
+   ],
+   [
+    "Flow features + context without C2",
+    "Chronological",
+    "0.575 ± 0.001",
+    "0.527",
+    "0.37"
+   ],
+   [
+    "Flow features + C2 only",
+    "Chronological",
+    "0.557 ± 0.008",
+    "0.507",
+    "0.26"
+   ],
+   [
+    "Flow features only",
+    "Random flow",
+    "0.632 ± 0.003",
+    "0.591",
+    "–"
+   ],
+   [
+    "Flow features + endpoint context",
+    "Random flow",
+    "0.795 ± 0.001",
+    "0.772",
+    "0.42"
+   ]
+  ],
+  "midRules": [
+   4
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "left",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "Same forest as the context probes in Table [#tab:diagnostics] (200 trees, 400,000-flow subsample, seeds 1 to 3). Shuffled context permutes the rows of the 34 context columns, which keeps their distribution but removes any link to the flow or its label. The last column is the share of the forest's impurity-based importance that falls on context columns."
+ },
+ "sensitivity": {
+  "caption": "Macro-F1 of the neural models under other window lengths and, post hoc, other training settings (chronological split, mean ± SD over five seeds)",
+  "colWidths": [
+   3.2,
+   1.5,
+   1.5,
+   1.5,
+   1.5,
+   1.5
+  ],
+  "header": [
+   [
+    "Setting",
+    "Flow-only MLP (B2)",
+    "E-GraphSAGE-style (B3)",
+    "Centrality-init. (B4)",
+    "CAG-IDS, concat.",
+    "CAG-IDS, gated"
+   ]
+  ],
+  "rows": [
+   [
+    "Window 30 s (2,897 windows)",
+    {
+     "text": "0.477 ± 0.007",
+     "bold": true
+    },
+    {
+     "text": "0.446 ± 0.012",
+     "bold": false
+    },
+    {
+     "text": "0.449 ± 0.013",
+     "bold": false
+    },
+    {
+     "text": "0.453 ± 0.005",
+     "bold": false
+    },
+    {
+     "text": "0.456 ± 0.009",
+     "bold": false
+    }
+   ],
+   [
+    "Window 60 s, planned settings (1,464 windows)",
+    {
+     "text": "0.463 ± 0.015",
+     "bold": true
+    },
+    {
+     "text": "0.423 ± 0.029",
+     "bold": false
+    },
+    {
+     "text": "0.454 ± 0.031",
+     "bold": false
+    },
+    {
+     "text": "0.439 ± 0.011",
+     "bold": false
+    },
+    {
+     "text": "0.443 ± 0.004",
+     "bold": false
+    }
+   ],
+   [
+    "Window 300 s (296 windows)",
+    {
+     "text": "0.431 ± 0.029",
+     "bold": true
+    },
+    {
+     "text": "0.388 ± 0.010",
+     "bold": false
+    },
+    {
+     "text": "0.405 ± 0.018",
+     "bold": false
+    },
+    {
+     "text": "0.426 ± 0.009",
+     "bold": false
+    },
+    {
+     "text": "0.423 ± 0.010",
+     "bold": false
+    }
+   ],
+   [
+    "√-inverse class weights",
+    {
+     "text": "0.510 ± 0.006",
+     "bold": true
+    },
+    {
+     "text": "0.471 ± 0.014",
+     "bold": false
+    },
+    {
+     "text": "0.478 ± 0.014",
+     "bold": false
+    },
+    {
+     "text": "0.473 ± 0.017",
+     "bold": false
+    },
+    {
+     "text": "0.465 ± 0.008",
+     "bold": false
+    }
+   ],
+   [
+    "Focal loss (*γ* = 2)",
+    {
+     "text": "0.464 ± 0.009",
+     "bold": true
+    },
+    {
+     "text": "0.406 ± 0.025",
+     "bold": false
+    },
+    {
+     "text": "0.417 ± 0.020",
+     "bold": false
+    },
+    {
+     "text": "0.432 ± 0.028",
+     "bold": false
+    },
+    {
+     "text": "0.446 ± 0.011",
+     "bold": false
+    }
+   ],
+   [
+    "60 epochs, patience 12",
+    {
+     "text": "0.482 ± 0.006",
+     "bold": true
+    },
+    {
+     "text": "0.448 ± 0.016",
+     "bold": false
+    },
+    {
+     "text": "0.456 ± 0.010",
+     "bold": false
+    },
+    {
+     "text": "0.458 ± 0.002",
+     "bold": false
+    },
+    {
+     "text": "0.464 ± 0.003",
+     "bold": false
+    }
+   ]
+  ],
+  "midRules": [
+   2
+  ],
+  "fontSize": 16,
+  "align": [
+   "left",
+   "center",
+   "center",
+   "center",
+   "center",
+   "center"
+  ],
+  "notes": "Each window length uses its own 70/10/20 chronological split of its windows. The last three rows change one training setting at a time. Apart from focal loss for gated CAG-IDS, which was planned, they were added after the planned runs had shown that the neural models over-predict the rare classes; the planned settings remain the primary results. The random forest reaches 0.579 ± 0.001 for comparison. Bold: best in the row."
+ },
+ "efficiency": {
+  "caption": "Measured processing cost",
+  "colWidths": [
+   6.0,
+   3.0
+  ],
+  "header": [
+   [
+    "Stage",
+    "Cost"
+   ]
+  ],
+  "rows": [
+   [
+    "Graph and context construction (CPU, one process)",
+    "4.12 ms per 60-s window"
+   ],
+   [
+    "Flow-only MLP (B2): forward pass for one window (GPU)",
+    "0.53 ms"
+   ],
+   [
+    "Flow-only MLP (B2): training run (GPU, up to 30 epochs)",
+    "20 s"
+   ],
+   [
+    "E-GraphSAGE-style GNN (B3): forward pass for one window (GPU)",
+    "2.03 ms"
+   ],
+   [
+    "E-GraphSAGE-style GNN (B3): training run (GPU, up to 30 epochs)",
+    "31 s"
+   ],
+   [
+    "Gated CAG-IDS: forward pass for one window (GPU)",
+    "1.93 ms"
+   ],
+   [
+    "Gated CAG-IDS: training run (GPU, up to 30 epochs)",
+    "30 s"
+   ],
+   [
+    "Gated CAG-IDS, GATv2: forward pass for one window (GPU)",
+    "2.09 ms"
+   ],
+   [
+    "Gated CAG-IDS, GATv2: training run (GPU, up to 30 epochs)",
+    "32 s"
+   ],
+   [
+    "Random forest: training (CPU, all cores, 400,000 flows)",
+    "18.5 s"
+   ],
+   [
+    "Random forest: batch prediction (CPU, all cores)",
+    "251,840 flows per second"
+   ],
+   [
+    "XGBoost: training (CPU, all cores, 400,000 flows)",
+    "32.4 s"
+   ],
+   [
+    "XGBoost: batch prediction (CPU, all cores)",
+    "308,843 flows per second"
+   ]
+  ],
+  "midRules": [
+   0,
+   8
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "left"
+  ],
+  "notes": "AMD Ryzen 7 7840HS CPU and NVIDIA GeForce RTX 4060 Laptop GPU. Forward passes are timed one window at a time over up to 200 test windows after five warm-up windows, as a deployed detector would run; training times are means over the five seeds. A 60-s window holds 1,689 flows at the median."
+ },
+ "inventory": {
+  "caption": "Experiments of the study",
+  "colWidths": [
+   3.8,
+   3.4,
+   1.6,
+   1.2
+  ],
+  "header": [
+   [
+    "Experiment",
+    "Purpose",
+    "Runs",
+    "Results"
+   ]
+  ],
+  "rows": [
+   [
+    "Dataset audit and probes",
+    "Shortcuts, host overlap, context information",
+    "1",
+    "[sec:audit]"
+   ],
+   [
+    "RF and XGBoost, chronological split",
+    "Flat baselines (B1)",
+    "2 × 5 seeds",
+    "[sec:main]"
+   ],
+   [
+    "B2, B3, B4, CAG-IDS concat., gated, GATv2",
+    "Main comparison (H1, H3)",
+    "6 × 5 seeds",
+    "[sec:main]"
+   ],
+   [
+    "C1 + gate control",
+    "Context groups against the direct context path",
+    "1 × 5 seeds",
+    "[sec:ablation]"
+   ],
+   [
+    "Neural context-only probe",
+    "Context information without topology",
+    "1 × 5 seeds",
+    "[sec:main]"
+   ],
+   [
+    "Context-group ablations",
+    "Contribution of C1, C2, C3; C4 check (H2)",
+    "4 × 5 seeds",
+    "[sec:ablation]"
+   ],
+   [
+    "RF, XGBoost and five neural models, random flow split",
+    "Effect of the split protocol (RQ2)",
+    "2 × 5 + 5 × 5 seeds",
+    "[sec:protocol]"
+   ],
+   [
+    "Forest probes with shuffled and partial context",
+    "Why context hurts a flat classifier",
+    "7 × 3 seeds",
+    "[sec:contexttests]"
+   ],
+   [
+    "Window length 30 s and 300 s",
+    "Sensitivity to the window",
+    "10 × 5 seeds",
+    "[sec:sensitivity]"
+   ],
+   [
+    "√-inverse weights, focal loss, longer training (post hoc)",
+    "Sensitivity to the training settings",
+    "15 × 5 seeds",
+    "[sec:sensitivity]"
+   ]
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "left",
+   "center",
+   "center"
+  ],
+  "notes": "All runs are started by scripts/run_all.py, and scripts/analyze.py produces every results table, data figure and quoted number from their outputs. The neural models account for 210 training runs."
+ }
+}

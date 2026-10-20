@@ -50,7 +50,7 @@ train:
   device: auto
 
 baselines:
-  models: [random_forest, xgboost, mlp]
+  models: [random_forest, xgboost]
   n_estimators: 200
   max_depth: null
   subsample_train: 400000

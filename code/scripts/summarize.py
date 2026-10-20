@@ -14,23 +14,7 @@ HEADERS = ["model", "macro F1", "weighted F1", "binary F1", "FPR", "PR-AUC"]
 def collect(results_dir):
     rows = []
 
-    baseline_path = results_dir / "baselines.json"
-    if baseline_path.exists():
-        with open(baseline_path, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-        for name, metrics in payload.get("results", {}).items():
-            rows.append({
-                "model": name,
-                "macro_f1": metrics["macro_f1"],
-                "weighted_f1": metrics["weighted_f1"],
-                "binary_f1": metrics["binary_f1"],
-                "fpr": metrics["false_positive_rate"],
-                "pr_auc": metrics.get("pr_auc", float("nan")),
-                "std": None,
-                "per_class": metrics["per_class"],
-            })
-
-    for path in sorted(results_dir.glob("gnn_*.json")):
+    for path in sorted(results_dir.glob("baseline_*.json")) + sorted(results_dir.glob("gnn_*.json")):
         with open(path, "r", encoding="utf-8") as handle:
             payload = json.load(handle)
         runs = payload.get("runs", [])
@@ -39,14 +23,15 @@ def collect(results_dir):
         agg = payload.get("aggregate", {})
         first = runs[0]
         rows.append({
-            "model": payload.get("experiment", path.stem),
+            "model": payload.get("tag", path.stem),
             "macro_f1": agg.get("macro_f1", {}).get("mean", first["macro_f1"]),
             "weighted_f1": agg.get("weighted_f1", {}).get("mean", first["weighted_f1"]),
             "binary_f1": agg.get("binary_f1", {}).get("mean", first["binary_f1"]),
             "fpr": agg.get("false_positive_rate", {}).get("mean", first["false_positive_rate"]),
             "pr_auc": agg.get("pr_auc", {}).get("mean", first.get("pr_auc", float("nan"))),
             "std": agg.get("macro_f1", {}).get("std"),
-            "per_class": first["per_class"],
+            "per_class": ({c: {"f1": v["f1_mean"]} for c, v in agg["per_class"].items()}
+                          if "per_class" in agg else first["per_class"]),
         })
 
     return rows
@@ -119,9 +104,9 @@ def main():
         print("Run run_baselines.py and train_gnn.py first.")
         return
 
-    order = {"random_forest": 0, "xgboost": 1, "mlp": 2,
+    order = {"random_forest": 0, "xgboost": 1, "flow_mlp": 2,
              "egraphsage": 3, "centrality_egraphsage": 4,
-             "cagids_concat": 5, "cagids": 6}
+             "cagids_concat": 5, "cagids": 6, "cagids_gatv2": 7}
     rows.sort(key=lambda r: order.get(r["model"], 99))
 
     print(as_text(rows))

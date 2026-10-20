@@ -120,9 +120,11 @@ def prepare_frame(df, cfg):
     identifier_cols = {resolved[r] for r in IDENTIFIER_ROLES if r in resolved}
     target_cols = {resolved[r] for r in TARGET_ROLES if r in resolved}
     drop = identifier_cols | target_cols
+    leaky_cols = []
     if cfg.data.get("drop_leaky", True):
         leaky = {_normalise(c) for c in cfg.data.get("leaky_features", [])}
-        drop |= {c for c in df.columns if _normalise(c) in leaky}
+        leaky_cols = [c for c in df.columns if _normalise(c) in leaky]
+        drop |= set(leaky_cols)
 
     feature_cols = []
     for col in df.columns:
@@ -141,7 +143,13 @@ def prepare_frame(df, cfg):
         for value, name in [(6, "tcp"), (17, "udp"), (1, "icmp")]:
             features["proto_is_{}".format(name)] = (proto == value).astype("float32")
 
-    out = pd.concat([out, features], axis=1)
+    # Excluded columns are carried along under a "probe__" prefix. They never
+    # reach a model; diagnostics.py uses them to show why they were excluded.
+    probes = pd.DataFrame(index=df.index)
+    for col in leaky_cols:
+        probes["probe__" + col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype("float32")
+
+    out = pd.concat([out, features, probes], axis=1)
     out = out.dropna(subset=["start_ms"])
     out = out.sort_values("start_ms", kind="mergesort").reset_index(drop=True)
 
@@ -149,6 +157,7 @@ def prepare_frame(df, cfg):
         "resolved": resolved,
         "feature_cols": list(features.columns),
         "dropped_cols": sorted(drop),
+        "probe_cols": list(probes.columns),
     }
     return out, meta
 
@@ -205,6 +214,27 @@ def chronological_split(window_ids, cfg):
     for w in unique[n_tr + n_va:]:
         assignment[w] = "test"
     return assignment
+
+
+def random_flow_split(labels, cfg, seed=42):
+    """The conventional protocol in the GNN-NIDS literature: flows are assigned
+    to train, validation and test at random (stratified by class) while every
+    window graph keeps all of its flows for message passing. Reported only to
+    show how far it inflates scores relative to the chronological split."""
+    rng = np.random.default_rng(seed)
+    labels = np.asarray(labels)
+    split = np.empty(len(labels), dtype="int8")
+    fr_tr = float(cfg.split["train"])
+    fr_va = float(cfg.split["val"])
+    for cls in np.unique(labels):
+        idx = np.flatnonzero(labels == cls)
+        idx = idx[rng.permutation(len(idx))]
+        n_tr = int(round(len(idx) * fr_tr))
+        n_va = int(round(len(idx) * fr_va))
+        split[idx[:n_tr]] = 0
+        split[idx[n_tr:n_tr + n_va]] = 1
+        split[idx[n_tr + n_va:]] = 2
+    return split
 
 
 def standardise(train_matrix, matrices):

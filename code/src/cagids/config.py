@@ -60,7 +60,7 @@ DEFAULTS = {
         "device": "auto",
     },
     "baselines": {
-        "models": ["random_forest", "xgboost", "mlp"],
+        "models": ["random_forest", "xgboost"],
         "n_estimators": 200,
         "max_depth": None,
         "subsample_train": 400000,
