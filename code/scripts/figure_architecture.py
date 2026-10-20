@@ -78,7 +78,7 @@ def main():
     box(ax, 2.40, 1.62, 1.62, 1.26, "Host context $\\mathbf{c}_v$",
         "C1 structural (window $t$): in/out-degree,\npeers, PageRank, clustering\n"
         "C2 behavioural (vs. $\\mathcal{H}_{t-1}$): z-scores,\npeer novelty, age, first-seen\n"
-        "C3 role: private address, inbound\nratio, service-port share, port entropy",
+        "C3 role: private address, inbound\nratio, service-port share, port entropy,\ntotal flows",
         C_CTX, 5.9)
     arrow(ax, (2.20, 2.52), (2.40, 2.52))
     arrow(ax, (2.20, 1.78), (2.40, 1.78))
