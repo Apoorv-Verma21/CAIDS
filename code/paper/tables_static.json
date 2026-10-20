@@ -1,0 +1,294 @@
+{
+ "related": {
+  "caption": "Representative graph-based and host-profiling detectors and how they treat node information and time",
+  "colWidths": [
+   2058,
+   1741,
+   2058,
+   1741,
+   1428
+  ],
+  "header": [
+   [
+    "Work",
+    "Graph",
+    "Node information",
+    "Temporal handling",
+    "Output"
+   ]
+  ],
+  "rows": [
+   [
+    "E-GraphSAGE [@lo2022egraphsage]",
+    "Static; IP:port endpoints as nodes",
+    "Constant vector",
+    "None",
+    "Flow class"
+   ],
+   [
+    "E-ResSAGE, E-ResGAT [@chang2021residuals, @chang2024eressage]",
+    "Static flow graph",
+    "Constant vector; flow features passed as residuals",
+    "None",
+    "Flow class"
+   ],
+   [
+    "Anomal-E [@caville2022anomale]",
+    "Static flow graph",
+    "Constant vector",
+    "None",
+    "Anomaly score (self-supervised)"
+   ],
+   [
+    "Centrality-based E-GraphSAGE [@termos2025centrality]",
+    "Static; IP addresses as nodes",
+    "Degree, betweenness, closeness, PageRank, k-truss",
+    "None",
+    "Flow class"
+   ],
+   [
+    "DLGNN [@duan2023dlgnn]",
+    "Snapshots as line graphs",
+    "Learned from topology",
+    "Dynamic snapshots",
+    "Flow class (semi-supervised)"
+   ],
+   [
+    "DIGNN-A [@liu2025dignn]",
+    "Dynamic graph, line-graph form",
+    "Learned from topology",
+    "Integrated dynamic GNN with attention",
+    "Flow class"
+   ],
+   [
+    "Euler [@king2023euler]",
+    "Sequence of snapshots",
+    "Learned from topology",
+    "GNN per snapshot and recurrent model",
+    "Link anomaly score"
+   ],
+   [
+    "Kitsune [@mirsky2018kitsune]",
+    "None (packet stream)",
+    "Damped statistics per host, channel and socket",
+    "Incremental, five decay windows",
+    "Anomaly score"
+   ],
+   [
+    {
+     "text": "CAG-IDS (this work)",
+     "bold": true
+    },
+    "Per-window multigraph; hosts as nodes",
+    "Explicit context from the current and earlier windows: structural, behavioural, role",
+    "Window graphs and per-host EWMA history",
+    "Flow class"
+   ]
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "left",
+   "left",
+   "left",
+   "left"
+  ]
+ },
+ "context": {
+  "caption": "Host context features computed for host *v* in window *t*",
+  "colWidths": [
+   921,
+   2394,
+   5711
+  ],
+  "header": [
+   [
+    "Group",
+    "Feature",
+    "Definition"
+   ]
+  ],
+  "rows": [
+   [
+    "C1",
+    "in-degree",
+    "log(1 + flows received by *v* in window *t*)"
+   ],
+   [
+    "",
+    "out-degree",
+    "log(1 + flows sent by *v* in window *t*)"
+   ],
+   [
+    "",
+    "peers",
+    "log(1 + number of distinct hosts *v* exchanged flows with)"
+   ],
+   [
+    "",
+    "PageRank",
+    "|*V*_{*t*}| times the PageRank of *v*, Eq. [eq:pagerank] (damping 0.85, 30 iterations)"
+   ],
+   [
+    "",
+    "clustering",
+    "local clustering coefficient of *v* in the undirected simple graph of window *t*, Eq. [eq:clustering]"
+   ],
+   [
+    "C2",
+    "z-flows, z-bytes",
+    "clipped z-scores of the log flow count and the log byte count against the host's EWMA history, Eq. [eq:zscore]"
+   ],
+   [
+    "",
+    "z-ports, z-peers",
+    "the same for the distinct destination ports contacted and the distinct peers"
+   ],
+   [
+    "",
+    "peer novelty",
+    "share of current peers never seen before, Eq. [eq:novelty]"
+   ],
+   [
+    "",
+    "age",
+    "log(1 + 60-s intervals since the host was first seen)"
+   ],
+   [
+    "",
+    "first-seen",
+    "1 if the host has no history, otherwise 0"
+   ],
+   [
+    "C3",
+    "private",
+    "1 if the address is private or special-purpose, otherwise 0"
+   ],
+   [
+    "",
+    "inbound ratio",
+    "in-degree / (in-degree + out-degree), counted in flows"
+   ],
+   [
+    "",
+    "service-port share",
+    "share of the flows started by *v* whose destination port is one of 34 well-known service ports"
+   ],
+   [
+    "",
+    "port entropy",
+    "Shannon entropy (bits) of the destination ports of the flows started by *v*, Eq. [eq:entropy]"
+   ],
+   [
+    "",
+    "total flows",
+    "log(1 + in-degree + out-degree)"
+   ],
+   [
+    "C4",
+    "time of day",
+    "sine and cosine of the window start time (optional; used only to check for schedule shortcuts)"
+   ]
+  ],
+  "midRules": [
+   4,
+   9,
+   14
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "left",
+   "left"
+  ],
+  "notes": "C1 structural, C2 behavioural, C3 role, C4 temporal. C1 and C3 use the flows of window *t*; C2 uses only the history of earlier windows. Byte counts add IN_BYTES and OUT_BYTES of every flow the host takes part in. Raw values are standardised with training-period statistics before encoding."
+ },
+ "settings": {
+  "caption": "Settings shared by every graph model and the flow-only MLP, and settings of the flat baselines",
+  "colWidths": [
+   3.4,
+   5.6
+  ],
+  "header": [
+   [
+    "Setting",
+    "Value"
+   ]
+  ],
+  "rows": [
+   [
+    "Window length Δ",
+    "60 s (30 s and 300 s in the sensitivity runs)"
+   ],
+   [
+    "EWMA factor *α*; z-score clip *τ*; *ε*",
+    "0.3; 10; 10^{−6}"
+   ],
+   [
+    "Context encoder",
+    "17 → 128 → 64, ReLU, dropout 0.2"
+   ],
+   [
+    "Message-passing layers *K*; hidden size",
+    "2; 128"
+   ],
+   [
+    "GATv2 backbone",
+    "4 heads of 32 units, LeakyReLU slope 0.2"
+   ],
+   [
+    "Classifier head",
+    "one hidden layer of 128 units, ReLU, dropout 0.2"
+   ],
+   [
+    "Flow-only MLP (B2)",
+    "46 → 128 → 128 → 10, ReLU, dropout 0.2"
+   ],
+   [
+    "Dropout",
+    "0.2 after every hidden layer and on the attention weights"
+   ],
+   [
+    "Optimiser",
+    "Adam, learning rate 3 × 10^{−3}, weight decay 10^{−5}"
+   ],
+   [
+    "Mini-batch; gradient clipping",
+    "8 windows, shuffled every epoch; global norm 5"
+   ],
+   [
+    "Epochs; early stopping",
+    "at most 30; patience 6 on validation macro-F1, best epoch restored"
+   ],
+   [
+    "Loss",
+    "class-weighted cross-entropy, Eq. [eq:loss], with inverse-frequency weights, Eq. [eq:class_weight]"
+   ],
+   [
+    "Seeds",
+    "1, 2, 3, 4 and 5 for every configuration"
+   ],
+   [
+    "Random forest",
+    "200 trees, unlimited depth, class weights balanced within each bootstrap sample"
+   ],
+   [
+    "XGBoost",
+    "200 trees, depth 6, learning rate 0.2, row and column subsampling 0.8, inverse-frequency sample weights"
+   ],
+   [
+    "Flat-baseline training set",
+    "all 60,417 training attack flows plus a random sample of benign training flows, 400,000 flows in total"
+   ]
+  ],
+  "midRules": [
+   12
+  ],
+  "fontSize": 17,
+  "align": [
+   "left",
+   "left"
+  ],
+  "keepTogether": false
+ }
+}

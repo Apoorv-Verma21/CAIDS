@@ -103,12 +103,22 @@ def _clustering(src, dst, n_nodes):
 
 
 class HostHistory:
-    def __init__(self, alpha=0.3):
+    """Per-host EWMA history. The age of a host counts, by default, the windows
+    elapsed since it was first seen, gaps in the capture included. With
+    age_mode="active" it counts only the earlier windows in which the host was
+    active, so a gap adds nothing; age_cap, if set, caps either count."""
+
+    def __init__(self, alpha=0.3, age_mode="elapsed", age_cap=None):
+        if age_mode not in ("elapsed", "active"):
+            raise ValueError("unknown age mode: {}".format(age_mode))
         self.alpha = float(alpha)
+        self.age_mode = age_mode
+        self.age_cap = None if age_cap is None else float(age_cap)
         self.mean = {}
         self.var = {}
         self.peers = {}
         self.first_window = {}
+        self.active_windows = {}
 
     def stats(self, host, values):
         mean = self.mean.get(host)
@@ -132,11 +142,18 @@ class HostHistory:
         first = self.first_window.get(host)
         if first is None:
             return 0.0
-        return float(window_index - first)
+        if self.age_mode == "active":
+            age = float(self.active_windows[host])
+        else:
+            age = float(window_index - first)
+        if self.age_cap is not None:
+            age = min(age, self.age_cap)
+        return age
 
     def update(self, host, values, current_peers, window_index):
         a = self.alpha
         mean = self.mean.get(host)
+        self.active_windows[host] = self.active_windows.get(host, 0) + 1
         if mean is None:
             self.mean[host] = values.astype("float64").copy()
             self.var[host] = np.ones(len(values), dtype="float64")
@@ -154,7 +171,8 @@ class HostHistory:
 class ContextExtractor:
     def __init__(self, cfg):
         self.cfg = cfg
-        self.history = HostHistory(cfg.context.get("ewma_alpha", 0.3))
+        self.history = HostHistory(cfg.context.get("ewma_alpha", 0.3), cfg.context.get("age_mode", "elapsed"),
+                                   cfg.context.get("age_cap"))
         self.names = context_feature_names(cfg)
         self.use_structural = cfg.context.get("use_structural", True)
         self.use_behavioural = cfg.context.get("use_behavioural", True)

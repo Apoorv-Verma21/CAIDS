@@ -65,16 +65,18 @@ def build_windowed_graphs(df, cfg, verbose=True):
     min_flows = int(cfg.data.get("min_flows_per_window", 2))
     max_windows = cfg.data.get("max_windows")
 
-    in_bytes = df["IN_BYTES"].values if "IN_BYTES" in df.columns else np.zeros(len(df))
-    out_bytes = df["OUT_BYTES"].values if "OUT_BYTES" in df.columns else np.zeros(len(df))
+    in_bytes = df["IN_BYTES"].to_numpy() if "IN_BYTES" in df.columns else np.zeros(len(df))
+    out_bytes = df["OUT_BYTES"].to_numpy() if "OUT_BYTES" in df.columns else np.zeros(len(df))
     total_bytes = np.asarray(in_bytes, dtype="float64") + np.asarray(out_bytes, dtype="float64")
 
-    src_ip = df["src_ip"].values
-    dst_ip = df["dst_ip"].values
-    src_port = df["src_port"].values
-    dst_port = df["dst_port"].values
-    start_ms = df["start_ms"].values
-    window_col = df["window_id"].values
+    # to_numpy keeps this independent of the pandas string backend (pandas 3
+    # returns extension arrays from .values for string columns).
+    src_ip = df["src_ip"].to_numpy(dtype=object)
+    dst_ip = df["dst_ip"].to_numpy(dtype=object)
+    src_port = df["src_port"].to_numpy(dtype="int64")
+    dst_port = df["dst_port"].to_numpy(dtype="int64")
+    start_ms = df["start_ms"].to_numpy(dtype="float64")
+    window_col = df["window_id"].to_numpy(dtype="int64")
 
     boundaries = np.flatnonzero(np.diff(window_col)) + 1
     starts = np.concatenate([[0], boundaries])
