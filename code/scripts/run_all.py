@@ -196,7 +196,11 @@ EXTENDED_GNN_RUNS = (
     [("failrerun_egraphsage", "egraphsage", "graphs", ["--epochs", "60", "--patience", "12"],
       ["8", "10", "11", "13", "19"]),
      ("failrerun_centrality_egraphsage", "centrality_egraphsage", "graphs", ["--epochs", "60", "--patience", "12"],
-      ["8", "11", "13", "14", "15", "16", "19"])]
+      ["8", "11", "13", "14", "15", "16", "19"])] +
+    # seeds 6 to 20 of B3, B4 and gated CAG-IDS with the longer budget, all seeds rather than only the failing
+    # ones, so that the failure rate and the macro-F1 gap under that budget are not selected on the outcome
+    [("extra_long_" + tag, exp, "graphs", ["--epochs", "60", "--patience", "12"], EXTRA_SEEDS)
+     for tag, exp in FIVE if tag in ("egraphsage", "centrality_egraphsage", "cagids")]
 )
 
 # (graphs, results tag, extra args)

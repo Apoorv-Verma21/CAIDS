@@ -218,6 +218,10 @@ def restrict(preds, keep_ids):
 
 SEED_STATS = {"mean": np.mean, "median": np.median, "trim20": lambda x: stats.trim_mean(x, 0.2)}
 BONFERRONI_3 = [100 * 0.025 / 3, 100 * (1 - 0.025 / 3)]   # 95% family-wise over the three planned comparisons
+# round 6: smallest effect of interest in macro-F1, fixed after the results (so the equivalence tests are
+# exploratory), and the z-multiplier of a minimum detectable effect (two-sided 5% level, 80% power)
+SESOI = 0.02
+MDE_Z = stats.norm.ppf(0.975) + stats.norm.ppf(0.80)
 
 
 def contrast(groups, coefs, edge_window, n_classes, keep_ids=None, n_boot=2000, block=10, seed=0, extra_stats=()):
@@ -264,6 +268,10 @@ def contrast(groups, coefs, edge_window, n_classes, keep_ids=None, n_boot=2000, 
             "per_seed": [f.tolist() for f in f_full],
             "two_level": [float(v) for v in np.percentile(two, [2.5, 97.5])],
             "two_level_bonf3": [float(v) for v in np.percentile(two, BONFERRONI_3)],
+            # round 6: the spread of the two-level replicates (for a minimum detectable effect) and the 90%
+            # interval of the two one-sided tests of equivalence
+            "two_level_sd": float(two.std(ddof=1)),
+            "two_level_90": [float(v) for v in np.percentile(two, [5, 95])],
             "window_only": [float(v) for v in np.percentile(win_only, [2.5, 97.5])],
             "seed_only": [float(v) for v in np.percentile(seed_only, [2.5, 97.5])],
             "p_two_level_le_0": float((two <= 0).mean()),
@@ -903,6 +911,11 @@ def main():
             p_le = ra["p_two_level_le_0"]
             p_planned[key] = min(1.0, 2 * min(p_le, 1 - p_le))
             put("tl_{}_p_two_sided".format(key), "{:.3f}".format(p_planned[key]))
+            # round 6: the smallest difference these seeds and windows detect with 80% power at the 5% level,
+            # and equivalence within SESOI (both 90% bounds inside the margin)
+            put("mde_{}".format(key), f3(MDE_Z * ra["two_level_sd"]))
+            put("eq90_{}".format(key), interval(*ra["two_level_90"]))
+            put("eq_{}_within_sesoi".format(key), bool(-SESOI < ra["two_level_90"][0] and ra["two_level_90"][1] < SESOI))
         put("tl_{}".format(key), ci_text(res))
         put("tl_{}_delta".format(key), signed(ra["delta"]))
         put("tl_{}_ci".format(key), interval(*ra["two_level"]))
@@ -972,6 +985,153 @@ def main():
     put("best_epoch_median", int(np.median(best_epochs)))
     put("best_epoch_n", len(best_epochs))
     put("best_epoch_late", int(sum(e > 24 for e in best_epochs)))
+    if ctx_only:
+        put("ctxonly_attack", pm(macro_list(ctx_only, "macro_f1_attacks")))
+        put("ctxonly_fpr", "{:.4f}".format(np.mean(macro_list(ctx_only, "false_positive_rate"))))
+
+    # round 6 (a): B3, B4 and gated CAG-IDS with the longer budget (60 epochs, patience 12) over seeds 1 to 20.
+    # Every seed is trained this way, not only those that failed, so the failure rate and the gap under this
+    # budget are not selected on the outcome.
+    long_tags = {"b3": "egraphsage", "b4": "centrality_egraphsage", "cagids": "cagids"}
+    LP = {k: seed_preds(pred_dir, "long_" + t, "extra_long_" + t) for k, t in long_tags.items()}
+    if all(p is not None and len(p) == len(ALL_SEEDS) for p in LP.values()):
+        lflags = {}
+        for k, p in LP.items():
+            f1s = [macro_f1_from_pred(y, q, n_classes) for _, y, q in p]
+            rr = runs_all(results, "long_" + long_tags[k])
+            lflags[k] = reply_flags(p)
+            V["_long_f1s_" + k] = f1s
+            put("long20_{}_macro".format(k), pm(f1s))
+            put("long20_{}_median".format(k), f3(np.median(f1s)))
+            put("long20_{}_range".format(k), "{} to {}".format(f3(min(f1s)), f3(max(f1s))))
+            put("long20_{}_failed".format(k), "{} of {}".format(int(lflags[k].sum()), len(p)))
+            put("long20_{}_gain".format(k), signed(np.mean(f1s) - np.mean(V["_f1s_" + k])))
+            put("long20_{}_best_epoch".format(k), "{} to {}".format(min(r["best_epoch"] for r in rr),
+                                                                    max(r["best_epoch"] for r in rr)))
+            put("long20_{}_best_epoch_median".format(k), int(np.median([r["best_epoch"] for r in rr])))
+            put("long20_{}_binary".format(k), pm(macro_list(rr, "binary_f1")))
+            # the seeds that failed under the planned settings, now trained with the longer budget
+            planned_failed = V["_reply"][k] if k in V["_reply"] else np.zeros(len(p), bool)
+            if planned_failed.any():
+                put("long20_{}_planned_failed_now".format(k), "{} of {}".format(
+                    int(lflags[k][planned_failed].sum()), int(planned_failed.sum())))
+        k_ = int(lflags["b3"].sum() + lflags["b4"].sum())
+        lo, hi = cp_interval(k_, 2 * len(ALL_SEEDS))
+        put("long20_b3b4_failed", "{} of {}".format(k_, 2 * len(ALL_SEEDS)))
+        put("long20_b3b4_failed_ci", "{:.0f}% to {:.0f}%".format(100 * lo, 100 * hi))
+        kp = int(V["_reply"]["b3"].sum() + V["_reply"]["b4"].sum())
+        put("long20_fisher_p", "{:.1e}".format(stats.fisher_exact([[kp, 40 - kp], [k_, 40 - k_]])[1]))
+        for a, b in (("cagids", "b3"), ("cagids", "b4")):
+            res = two_level_bootstrap(LP[a], LP[b], edge_window, n_classes, n_boot=args.n_boot)
+            key = "long20_{}_{}".format(a, b)
+            put(key, ci_text(res))
+            put(key + "_att", ci_text(res, "attacks"))
+            put(key + "_excludes_zero", excludes_zero(res["all"]["two_level"]))
+            put(key + "_mde", f3(MDE_Z * res["all"]["two_level_sd"]))
+            put(key + "_eq90", interval(*res["all"]["two_level_90"]))
+            five = two_level_bootstrap(LP[a][:5], LP[b][:5], edge_window, n_classes, n_boot=args.n_boot)
+            V["_t10_long_" + a + "_" + b] = [signed(five["all"]["delta"]), interval(*five["all"]["window_only"]),
+                                             signed(res["all"]["delta"]), interval(*res["all"]["two_level"])]
+        for k in LP:
+            res = two_level_bootstrap(LP[k], preds[k], edge_window, n_classes, n_boot=args.n_boot)
+            put("long20_{}_minus_planned".format(k), ci_text(res))
+    else:
+        print("longer-budget runs incomplete:", {k: None if p is None else len(p) for k, p in LP.items()})
+
+    # round 6 (b): H1 and H3 after the prior correction of Section 6.8, over 20 seeds. Seeds 6 to 20 choose
+    # lambda on their own validation outputs; seeds 1 to 5, whose validation outputs were not saved, use the
+    # median lambda of seeds 6 to 20 of the same model, so no lambda is chosen on the test set.
+    def test_scores(path, key):
+        d = np.load(path)
+        order = np.argsort(d["edge_ids"])
+        return d["edge_ids"][order].astype("int32"), d["y_true"][order].astype("int8"), d[key][order].astype("float64")
+
+    PC, pc_lam = {}, {}
+    for k, t in [("mlp", "flow_mlp"), ("b3", "egraphsage"), ("b4", "centrality_egraphsage"),
+                 ("concat", "cagids_concat"), ("cagids", "cagids")]:
+        extra, lams, log_ws = [], [], []
+        for s in EXTRA_SEEDS:
+            path = pred_dir / "extra_{}_seed{}.npz".format(t, s)
+            _, vs, vy, ts, ty, log_w = load_correction_inputs(path, "neural")
+            r = prior_correction(vs, vy, ts, ty, log_w, n_classes)
+            ids = np.sort(np.load(path)["edge_ids"]).astype("int32")
+            extra.append((ids, ty.astype("int8"), r["pred_tuned"].astype("int8")))
+            lams.append(r["lambda"])
+            log_ws.append(log_w)
+        assert all(np.allclose(w, log_ws[0]) for w in log_ws), "class weights differ between seeds"
+        lam = float(np.median(lams))
+        planned, agree = [], []
+        for s in PLANNED_SEEDS:
+            ids, y, prob = test_scores(pred_dir / "{}_seed{}.npz".format(t, s), "y_prob")
+            scores = np.log(np.maximum(prob, 6e-8))   # float16 probabilities: floor at the smallest subnormal
+            agree.append(float((scores.argmax(1) == preds[k][s - 1][2]).mean()))
+            planned.append((ids, y, (scores - lam * log_ws[0]).argmax(1).astype("int8")))
+        PC[k] = planned + extra
+        pc_lam[k] = lam
+        f1s = [macro_f1_from_pred(y, q, n_classes) for _, y, q in PC[k]]
+        V["_pc_f1s_" + k] = f1s
+        put("prior20_{}_macro".format(k), pm(f1s))
+        put("prior20_{}_lambda".format(k), "{:.1f}".format(lam))
+        put("prior20_{}_argmax_agreement".format(k), "{:.4f}".format(min(agree)))
+        put("prior20_{}_gain".format(k), signed(np.mean(f1s) - np.mean(V["_f1s_" + k])))
+    p_pc = {}
+    for a, b, key in (("cagids", "b3", "cagids_b3"), ("cagids", "b4", "cagids_b4"), ("cagids", "concat", "cagids_concat"),
+                      ("b4", "b3", "b4_b3"), ("cagids", "mlp", "cagids_mlp")):
+        res = two_level_bootstrap(PC[a], PC[b], edge_window, n_classes, n_boot=args.n_boot)
+        ra = res["all"]
+        put("prior20_{}".format(key), ci_text(res))
+        put("prior20_{}_att".format(key), ci_text(res, "attacks"))
+        put("prior20_{}_excludes_zero".format(key), excludes_zero(ra["two_level"]))
+        five = two_level_bootstrap(PC[a][:5], PC[b][:5], edge_window, n_classes, n_boot=args.n_boot)
+        put("prior20_{}_five".format(key), "{} {}".format(signed(five["all"]["delta"]),
+                                                          interval(*five["all"]["window_only"])))
+        V["_t10_prior_" + key] = [signed(five["all"]["delta"]), interval(*five["all"]["window_only"]),
+                                  signed(ra["delta"]), interval(*ra["two_level"])]
+        if key in planned_keys:
+            put("prior20_{}_bonf4".format(key), interval(*ra["two_level_bonf3"], digits=4))
+            put("prior20_{}_mde".format(key), f3(MDE_Z * ra["two_level_sd"]))
+            put("prior20_{}_eq90".format(key), interval(*ra["two_level_90"]))
+            p_le = ra["p_two_level_le_0"]
+            p_pc[key] = min(1.0, 2 * min(p_le, 1 - p_le))
+    order = sorted(p_pc, key=p_pc.get)
+    running = 0.0
+    for i, key in enumerate(order):
+        running = max(running, min(1.0, (3 - i) * p_pc[key]))
+        put("prior20_{}_p_holm".format(key), "{:.3f}".format(running))
+    pc_rows = []
+    for k, label in [("mlp", "Flow-only MLP (B2)"), ("b3", "E-GraphSAGE-style (B3)"), ("b4", "Centrality-init. (B4)"),
+                     ("concat", "CAG-IDS, concat."), ("cagids", "CAG-IDS, gated")]:
+        pc_rows.append([label, pm(V["_f1s_" + k]), "{} (λ = {:.1f})".format(pm(V["_pc_f1s_" + k]), pc_lam[k])])
+    V["table_pc20"] = pc_rows
+
+    # round 6 (c): paired tests between B4 and gated CAG-IDS in Table 15 (seeds 6 to 20, all training flows),
+    # after the tuned prior correction and after per-class offsets
+    pair15 = {"tuned": {k: PC[k][len(PLANNED_SEEDS):] for k in ("b4", "cagids")}}
+    if not args.skip_corrections:
+        rows_c, owners, outs = run_corrections(args, work, results, pred_dir, meta, classes, edge_window)
+        offs = {}
+        for k, row_key, t in (("b4", "b4_all", "extra_centrality_egraphsage"), ("cagids", "cagids_all", "extra_cagids")):
+            biases = [o["bias"] for o, w in zip(outs, owners) if w == row_key]
+            offs[k] = []
+            for s, bias in zip(EXTRA_SEEDS, biases):
+                ids, y, ts = test_scores(pred_dir / "{}_seed{}.npz".format(t, s), "y_logit")
+                offs[k].append((ids, y, (ts + np.asarray(bias)).argmax(1).astype("int8")))
+        pair15["offsets"] = offs
+    for name, P in pair15.items():
+        res = two_level_bootstrap(P["cagids"], P["b4"], edge_window, n_classes, n_boot=args.n_boot)
+        put("pair15_{}_cagids_b4".format(name), ci_text(res))
+        put("pair15_{}_cagids_b4_excludes_zero".format(name), excludes_zero(res["all"]["two_level"]))
+        put("pair15_{}_means".format(name), "{} vs {}".format(f3(res["all"]["a_mean"]), f3(res["all"]["b_mean"])))
+    # extra rows of Table 10: the planned comparisons under the longer budget and after the prior correction
+    t10_extra = []
+    for key, label in (("_t10_long_cagids_b3", "Gated CAG-IDS − E-GraphSAGE-style, 60 epochs, patience 12"),
+                       ("_t10_long_cagids_b4", "Gated CAG-IDS − centrality-initialised, 60 epochs, patience 12"),
+                       ("_t10_prior_cagids_b3", "Gated CAG-IDS − E-GraphSAGE-style, prior correction"),
+                       ("_t10_prior_cagids_b4", "Gated CAG-IDS − centrality-initialised, prior correction"),
+                       ("_t10_prior_cagids_concat", "Gate − concatenation, prior correction")):
+        if key in V:
+            t10_extra.append([label] + V[key])
+    V["table_two_level_r6"] = t10_extra
 
     # ------------------------------------------------------------------ 2
     print("\n=== 2. the forest's recipe, a prior correction and per-class offsets ===")
@@ -1413,6 +1573,28 @@ def main():
         res = two_level_bootstrap(SS[a], SS[b], ew_ss, n_classes, n_boot=args.n_boot)
         put("swv_{}_minus_{}".format(a, b), ci_text(res))
         put("swv_{}_minus_{}_excludes_zero".format(a, b), excludes_zero(res["all"]["two_level"]))
+    # round 6: with validation on session-1 flows, gated CAG-IDS without C2 scores above the flow-only MLP on
+    # session 2 (Table A7). Is that more than seed noise, and does it survive window-level validation?
+    ssf = {k: seed_preds(pred_dir, "ss_" + t) for k, t in (("mlp", "flow_mlp"), ("nob", "abl_no_behavioural"))}
+    if all(v is not None for v in ssf.values()):
+        ew_ssf = np.load(work / "graphs_session" / "graphs.npz")["edge_window"]
+        res = two_level_bootstrap(ssf["nob"], ssf["mlp"], ew_ssf, n_classes, n_boot=args.n_boot)
+        put("ssf_nob_minus_mlp", ci_text(res))
+        put("ssf_nob_minus_mlp_att", ci_text(res, "attacks"))
+        put("ssf_nob_minus_mlp_excludes_zero", excludes_zero(res["all"]["two_level"]))
+        ss_runs = {k: runs_of(results, "gnn_ss_" + t) for k, t in (("mlp", "flow_mlp"), ("nob", "abl_no_behavioural"))}
+        gains = {c: np.mean([r["per_class"][c]["f1"] for r in ss_runs["nob"]]) -
+                 np.mean([r["per_class"][c]["f1"] for r in ss_runs["mlp"]]) for c in classes}
+        put("ssf_nob_minus_mlp_per_class", {c: signed(v) for c, v in gains.items()})
+        for k in ("mlp", "nob"):
+            put("ssf_{}_best_epoch".format(k), "{} to {}".format(min(r["best_epoch"] for r in ss_runs[k]),
+                                                                 max(r["best_epoch"] for r in ss_runs[k])))
+        if SS.get("nob") is not None:
+            try:
+                res = two_level_bootstrap(ssf["nob"], SS["nob"], ew_ssf, n_classes, n_boot=args.n_boot)
+                put("ssf_nob_minus_swv_nob", ci_text(res))
+            except ValueError as err:
+                print("flow- and window-level session runs not comparable:", err)
     ss_rows = []
     # round 3: columns are validation and test under flow-level validation, the same under window-level
     # validation, and the test score when early stopping leaves out Backdoor and Worms
