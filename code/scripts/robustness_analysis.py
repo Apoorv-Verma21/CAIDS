@@ -1009,6 +1009,17 @@ def main():
             put("long20_{}_best_epoch".format(k), "{} to {}".format(min(r["best_epoch"] for r in rr),
                                                                     max(r["best_epoch"] for r in rr)))
             put("long20_{}_best_epoch_median".format(k), int(np.median([r["best_epoch"] for r in rr])))
+            # round 9: which seeds fail under the longer budget, and whether they failed under the planned settings
+            failed_ids = [i for i, f in enumerate(lflags[k]) if f]
+            put("long20_{}_failed_seeds".format(k), ", ".join(str(ALL_SEEDS[i]) for i in failed_ids) or "none")
+            if k in V["_reply"]:
+                put("long20_{}_failed_seeds_planned_failed".format(k),
+                    ", ".join("yes" if V["_reply"][k][i] else "no" for i in failed_ids) or "none")
+            shares = []
+            for ids, y, q in p:
+                m = (y == 0) & to_attacker[ids]
+                shares.append(float((q[m] != 0).mean()))
+            V["_long_shares_" + k] = shares
             put("long20_{}_binary".format(k), pm(macro_list(rr, "binary_f1")))
             # the seeds that failed under the planned settings, now trained with the longer budget
             planned_failed = V["_reply"][k] if k in V["_reply"] else np.zeros(len(p), bool)
@@ -1132,6 +1143,83 @@ def main():
         if key in V:
             t10_extra.append([label] + V[key])
     V["table_two_level_r6"] = t10_extra
+
+    # round 9 (a): the 12 failed seeds were trained twice with the longer budget, once in the rerun of failed seeds
+    # and once in the 20-seed run. GPU scatter operations make the two runs of a seed differ; how much?
+    for k, tag in (("b3", "failrerun_egraphsage"), ("b4", "failrerun_centrality_egraphsage")):
+        rr = runs_of(results, "gnn_" + tag)
+        if not rr or "_long_shares_" + k not in V:
+            continue
+        seeds = [r["seed"] for r in rr]
+        first = []
+        for ids, y, q in seed_preds(pred_dir, tag, seeds_planned=seeds):
+            m = (y == 0) & to_attacker[ids]
+            first.append(float((q[m] != 0).mean()))
+        second = [V["_long_shares_" + k][ALL_SEEDS.index(s)] for s in seeds]
+        f1_first = [r["macro_f1"] for r in rr]
+        f1_second = [V["_long_f1s_" + k][ALL_SEEDS.index(s)] for s in seeds]
+        put("overlap_{}_seeds".format(k), ", ".join(str(s) for s in seeds))
+        put("overlap_{}_share_pairs".format(k), {s: "{:.0f}% / {:.0f}%".format(100 * a, 100 * b)
+                                                 for s, a, b in zip(seeds, first, second)})
+        put("overlap_{}_max_share_second".format(k), "{:.0f}%".format(100 * max(second)))
+        put("overlap_{}_max_share_second_seed".format(k), seeds[int(np.argmax(second))])
+        put("overlap_{}_macro_absdiff_max".format(k), f3(max(abs(a - b) for a, b in zip(f1_first, f1_second))))
+        put("overlap_{}_macro_absdiff_median".format(k), f3(np.median([abs(a - b) for a, b in zip(f1_first, f1_second)])))
+
+    # round 9 (b): the five neural models trained with square-root weights over seeds 1 to 20; H1 and H3 on models
+    # trained without the extreme weights instead of corrected after training
+    SW = {k: seed_preds(pred_dir, "sw_" + t, "extra_sw_" + t) for t, k, _ in NEURAL}
+    if all(p is not None and len(p) == len(ALL_SEEDS) for p in SW.values()):
+        for t, k, _ in NEURAL:
+            f1s = [macro_f1_from_pred(y, q, n_classes) for _, y, q in SW[k]]
+            V["_sw_f1s_" + k] = f1s
+            flags = reply_flags(SW[k])
+            put("sw20_{}_macro".format(k), pm(f1s))
+            put("sw20_{}_median".format(k), f3(np.median(f1s)))
+            put("sw20_{}_failed".format(k), "{} of {}".format(int(flags.sum()), len(flags)))
+            put("sw20_{}_gain".format(k), signed(np.mean(f1s) - np.mean(V["_f1s_" + k])))
+            rr = runs_all(results, "sw_" + t)
+            put("sw20_{}_best_epoch_median".format(k), int(np.median([r["best_epoch"] for r in rr])))
+        k_ = sum(int(reply_flags(SW[k]).sum()) for k in ("b3", "b4"))
+        lo, hi = cp_interval(k_, 2 * len(ALL_SEEDS))
+        put("sw20_b3b4_failed", "{} of {}".format(k_, 2 * len(ALL_SEEDS)))
+        put("sw20_b3b4_failed_ci", "{:.0f}% to {:.0f}%".format(100 * lo, 100 * hi))
+        p_sw = {}
+        for a, b, key in (("cagids", "b3", "cagids_b3"), ("cagids", "b4", "cagids_b4"), ("cagids", "concat", "cagids_concat"),
+                          ("cagids", "mlp", "cagids_mlp"), ("b4", "b3", "b4_b3"), ("concat", "b3", "concat_b3")):
+            res = two_level_bootstrap(SW[a], SW[b], edge_window, n_classes, n_boot=args.n_boot)
+            ra = res["all"]
+            put("sw20_{}".format(key), ci_text(res))
+            put("sw20_{}_att".format(key), ci_text(res, "attacks"))
+            put("sw20_{}_excludes_zero".format(key), excludes_zero(ra["two_level"]))
+            put("sw20_{}_mde".format(key), f3(MDE_Z * ra["two_level_sd"]))
+            put("sw20_{}_eq90".format(key), interval(*ra["two_level_90"]))
+            if key in planned_keys:
+                put("sw20_{}_bonf4".format(key), interval(*ra["two_level_bonf3"], digits=4))
+                p_le = ra["p_two_level_le_0"]
+                p_sw[key] = min(1.0, 2 * min(p_le, 1 - p_le))
+        order = sorted(p_sw, key=p_sw.get)
+        running = 0.0
+        for i, key in enumerate(order):
+            running = max(running, min(1.0, (3 - i) * p_sw[key]))
+            put("sw20_{}_p_holm".format(key), "{:.3f}".format(running))
+    else:
+        print("square-root-weight runs incomplete:", {k: None if p is None else len(p) for k, p in SW.items()})
+
+    # round 9 (c): Table 10 split into the planned comparisons and an exploratory block without five-seed columns
+    explo = []
+    for key, label in (("long20_cagids_b3", "Gated CAG-IDS − E-GraphSAGE-style, 60 epochs, patience 12"),
+                       ("long20_cagids_b4", "Gated CAG-IDS − centrality-initialised, 60 epochs, patience 12"),
+                       ("sw20_cagids_b3", "Gated CAG-IDS − E-GraphSAGE-style, √-inverse weights"),
+                       ("sw20_cagids_b4", "Gated CAG-IDS − centrality-initialised, √-inverse weights"),
+                       ("sw20_cagids_concat", "Gate − concatenation, √-inverse weights"),
+                       ("prior20_cagids_b3", "Gated CAG-IDS − E-GraphSAGE-style, prior correction"),
+                       ("prior20_cagids_b4", "Gated CAG-IDS − centrality-initialised, prior correction"),
+                       ("prior20_cagids_concat", "Gate − concatenation, prior correction")):
+        if key in V:
+            d_, iv = V[key].split(" ", 1)
+            explo.append([label, "–", "–", d_, iv])
+    V["table_two_level_r9"] = explo
 
     # ------------------------------------------------------------------ 2
     print("\n=== 2. the forest's recipe, a prior correction and per-class offsets ===")
