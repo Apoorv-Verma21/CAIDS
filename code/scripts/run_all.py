@@ -200,7 +200,10 @@ EXTENDED_GNN_RUNS = (
     # seeds 6 to 20 of B3, B4 and gated CAG-IDS with the longer budget, all seeds rather than only the failing
     # ones, so that the failure rate and the macro-F1 gap under that budget are not selected on the outcome
     [("extra_long_" + tag, exp, "graphs", ["--epochs", "60", "--patience", "12"], EXTRA_SEEDS)
-     for tag, exp in FIVE if tag in ("egraphsage", "centrality_egraphsage", "cagids")]
+     for tag, exp in FIVE if tag in ("egraphsage", "centrality_egraphsage", "cagids")] +
+    # seeds 6 to 20 of the five neural models with square-root inverse-frequency weights, so that H1 and H3 can be
+    # tested at 20 seeds on models trained without the extreme weights rather than only corrected after training
+    [("extra_sw_" + tag, exp, "graphs", ["--class-weighting", "sqrt_inverse"], EXTRA_SEEDS) for tag, exp in FIVE]
 )
 
 # (graphs, results tag, extra args)

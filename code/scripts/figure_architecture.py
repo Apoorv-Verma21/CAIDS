@@ -97,7 +97,8 @@ def main():
     label(ax, 4.98, 1.77, "$\\mathbf{h}^{(0)}_v=\\mathbf{c}^{\\prime}_v$")
     line(ax, [(1.69, 1.08), (1.69, 0.82), (4.05, 0.82)])
     arrow(ax, (4.04, 0.82), (4.22, 0.82))
-    label(ax, 2.95, 0.73, "edges carry flow features $\\mathbf{e}_{uv}$ (IPs, ports, timestamps, TTL removed)",
+    label(ax, 2.95, 0.73, "edges carry flow features $\\mathbf{e}_{uv}$\n"
+          "(IPs, ports, timestamps, TTL and byte rates removed)",
           color="#444444", size=5.8, va="top")
 
     # fusion and classifier ------------------------------------------------------
