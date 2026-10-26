@@ -64,16 +64,21 @@ def make_seed_figure(V, root):
     plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman"], "font.size": 8,
                          "axes.labelsize": 8, "legend.fontsize": 6.5, "xtick.labelsize": 6.5, "ytick.labelsize": 7})
     fig, ax = plt.subplots(figsize=(4.6, 2.75))
+    # round 10: every run is coloured by the share of the victims' replies it labels as attacks, so the figure
+    # shows the failure as a continuum; crosses still mark the runs above the 50% rule
+    cmap = plt.get_cmap("plasma_r")
+    norm = matplotlib.colors.Normalize(vmin=0.0, vmax=1.0)
     for x, (k, _) in enumerate(SEED_FIGURE_MODELS):
         f1s = np.asarray(V["_f1s_" + k])
         flag = V["_reply"][k]
+        share = np.asarray(V["_reply_shares"][k])
         order = np.argsort(np.argsort(f1s))
         jitter = (order / max(len(f1s) - 1, 1) - 0.5) * 0.36
-        ax.scatter(x + jitter[~flag], f1s[~flag], s=11, color="#4e79a7", alpha=0.85, linewidths=0, zorder=3,
-                   label="seed" if x == 0 else None)
+        sc = ax.scatter(x + jitter[~flag], f1s[~flag], s=12, c=share[~flag], cmap=cmap, norm=norm, linewidths=0.3,
+                        edgecolors="#555555", zorder=3, label="run" if x == 0 else None)
         if flag.any():
-            ax.scatter(x + jitter[flag], f1s[flag], s=16, marker="x", color="#e15759", linewidths=1.0, zorder=4,
-                       label="seed that flags the victims' replies" if k == "b3" else None)
+            ax.scatter(x + jitter[flag], f1s[flag], s=18, marker="x", c=share[flag], cmap=cmap, norm=norm,
+                       linewidths=1.1, zorder=4, label="run above the 50% rule" if k == "b3" else None)
         ax.hlines(np.median(f1s), x - 0.27, x + 0.27, color="black", lw=1.1, zorder=5,
                   label="median" if x == 0 else None)
         ax.scatter([x + 0.31], [f1s.mean()], marker="D", s=10, facecolor="white", edgecolor="black", linewidths=0.7,
@@ -84,8 +89,18 @@ def make_seed_figure(V, root):
     ax.set_xlim(-0.6, len(SEED_FIGURE_MODELS) - 0.4)
     ax.grid(axis="y", color="#e6e6e6", lw=0.5)
     ax.set_axisbelow(True)
-    ax.legend(loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 1.0), handletextpad=0.3,
-              columnspacing=1.0)
+    leg = ax.legend(loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 1.0), handletextpad=0.3,
+                    columnspacing=1.0)
+    for h, t in zip(leg.legend_handles, leg.get_texts()):
+        if t.get_text() == "run":
+            h.set_facecolor("#c8c8c8")
+        elif t.get_text() == "median":
+            h.set_color("black")
+        elif "50%" in t.get_text():
+            h.set_color("#2c0d6b")
+    cb = fig.colorbar(sc, ax=ax, fraction=0.035, pad=0.015)
+    cb.set_label("share of victims' replies\nlabelled as attacks", fontsize=6.5)
+    cb.ax.tick_params(labelsize=6)
     fig.tight_layout(pad=0.4)
     out = Path(root) / "paper" / "generated" / "figures" / "fig_seeds.png"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -652,6 +667,13 @@ def main():
         flag = np.array(shares) > 0.5
         f1s = np.array(V["_f1s_" + k])
         V["_reply"][k] = flag
+        V.setdefault("_reply_shares", {})[k] = shares
+        # round 10: the share is a continuum, so also count the runs between 10% and 50% and give the spread
+        sh = np.array(shares)
+        put("reply_{}_runs_10_50".format(k), int(((sh > 0.10) & (sh <= 0.5)).sum()))
+        put("reply_{}_share_median".format(k), "{:.0f}%".format(100 * np.median(sh)))
+        put("reply_{}_share_below_50_max".format(k), "{:.0f}%".format(100 * sh[sh <= 0.5].max()) if (sh <= 0.5).any()
+            else "–")
         put("reply_{}_n_flows".format(k), int(((p[0][1] == 0) & to_attacker[p[0][0]]).sum()))
         put("reply_{}_n".format(k), int(flag.sum()))
         put("reply_{}_share_flagged".format(k), "{:.1f}% to {:.1f}%".format(100 * min(np.array(shares)[flag], default=0),
@@ -915,6 +937,7 @@ def main():
             # and equivalence within SESOI (both 90% bounds inside the margin)
             put("mde_{}".format(key), f3(MDE_Z * ra["two_level_sd"]))
             put("eq90_{}".format(key), interval(*ra["two_level_90"]))
+            put("eq90_{}_4".format(key), interval(*ra["two_level_90"], digits=4))
             put("eq_{}_within_sesoi".format(key), bool(-SESOI < ra["two_level_90"][0] and ra["two_level_90"][1] < SESOI))
         put("tl_{}".format(key), ci_text(res))
         put("tl_{}_delta".format(key), signed(ra["delta"]))
