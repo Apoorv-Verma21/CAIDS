@@ -312,6 +312,8 @@ def run_extended(args, py, common, work, results, log):
         if not (results / "context_probe_tests_random_window.json").exists():
             run([py, os.path.join(SCRIPTS, "context_probe_tests.py")] + common +
                 ["--splits", "graphs_random_window:random_window", "--out", "context_probe_tests_random_window.json"], log)
+        if not (results / "fingerprint_probe_graphs.json").exists():
+            run([py, os.path.join(SCRIPTS, "fingerprint_probe.py")] + common, log)
     if args.baselines_only:
         return
 

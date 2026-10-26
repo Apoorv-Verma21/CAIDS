@@ -1606,6 +1606,16 @@ def main():
     sf = diag["single_feature_probes"]
     for f in FINGERPRINT_FIELDS:
         put("fp_single_{}".format(f), "macro {} binary {}".format(f3(sf[f]["macro_f1"]), f3(sf[f]["binary_f1"])))
+    fpp = load_json(results, "fingerprint_probe_graphs")
+    lp, hp = fpp["label_probe"], fpp["host_probe"]
+    put("fp_joint_macro", f3(lp["macro_f1"]))
+    put("fp_joint_attack", f3(lp["macro_f1_attacks"]))
+    put("fp_joint_binary", f3(lp["binary_f1"]))
+    put("fp_joint_fpr", "{:.4f}".format(lp["false_positive_rate"]))
+    put("fp_host_accuracy", "{:.1f}%".format(100 * hp["accuracy"]))
+    put("fp_host_majority", "{:.1f}%".format(100 * hp["majority_accuracy"]))
+    put("fp_host_balanced_acc", "{:.1f}%".format(100 * hp["balanced_accuracy"]))
+    put("fp_n_hosts_test", hp["n_sources_test"])
     for name, base, nofp in [("rf", "baseline_random_forest", "baseline_random_forest_nofp"),
                              ("mlp", "gnn_flow_mlp", "gnn_nofp_flow_mlp"), ("cagids", "gnn_cagids", "gnn_nofp_cagids")]:
         a, b = runs_of(results, base), runs_of(results, nofp)
