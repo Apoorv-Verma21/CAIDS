@@ -1,12 +1,4 @@
-"""Turns the experiment outputs into the paper's tables (JSON for the Word
-builder), the numbers quoted in the text and the data figures, so that no
-reported number is typed by hand.
 
-    python scripts/analyze.py --root D:/CAIDS_work
-
-Writes code/paper/generated/tables_generated.json, values.json and figures/.
-The script stops with an error if a result file it needs is missing.
-"""
 import argparse
 import json
 import os
@@ -1023,8 +1015,11 @@ def make_figures(work, results, figdir, classes, diag, meta, gate_curves):
     plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman"], "font.size": 8,
                          "axes.titlesize": 8, "axes.labelsize": 8, "legend.fontsize": 6.5,
                          "xtick.labelsize": 7, "ytick.labelsize": 7, "mathtext.fontset": "stix"})
-    palette = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac"]
-    colors = dict(zip([c for c in classes if c != "Benign"], palette))
+    # black and white only: the attack classes differ by grey level and hatching
+    plt.rcParams.update({"hatch.linewidth": 0.45})
+    fills = [("black", ""), ("white", "////////"), ("#5a5a5a", ""), ("#c4c4c4", ""), ("white", "........"),
+             ("#8f8f8f", ""), ("white", "xxxxxx"), ("white", "\\\\\\\\\\\\\\\\"), ("#e3e3e3", "------")]
+    fills = dict(zip([c for c in classes if c != "Benign"], fills))
 
     # timeline -------------------------------------------------------------
     tl = pd.read_csv(results / "timeline_graphs.csv", index_col=0)
@@ -1035,29 +1030,35 @@ def make_figures(work, results, figdir, classes, diag, meta, gate_curves):
         part = tl[sel]
         tt = t[sel]
         hours = (tt - tt[0]).total_seconds() / 3600.0 + tt[0].hour + tt[0].minute / 60.0
-        ax.plot(hours, part["Benign"].values, color="#999999", lw=0.8, label="Benign")
+        ax.plot(hours, part["Benign"].values, color="black", lw=0.8, label="Benign")
         bottom = np.zeros(len(part))
         for c in [c for c in classes if c != "Benign" and c in part.columns]:
-            ax.bar(hours, part[c].values, bottom=bottom, width=1 / 6.0, color=colors[c], label=c, align="edge", linewidth=0)
+            face, hatch = fills[c]
+            ax.bar(hours, part[c].values, bottom=bottom, width=1 / 6.0, color=face, hatch=hatch, edgecolor="black",
+                   label=c, align="edge", linewidth=0)
             bottom += part[c].values
         ax.set_yscale("symlog", linthresh=10)
         split = part["split"].values
-        for code, shade, name in [(1, "#fde0c5", "validation"), (2, "#d9e8f5", "test")]:
+        for code, name in [(1, "validation"), (2, "test")]:
             m = split == code
             if m.any():
-                ax.axvspan(hours[m].min(), hours[m].max() + 1 / 6.0, color=shade, zorder=0, lw=0)
-                ax.text((hours[m].min() + hours[m].max()) / 2, 2.2e4, name, ha="center", fontsize=6.5)
+                for x in (hours[m].min(), hours[m].max() + 1 / 6.0):
+                    ax.axvline(x, color="black", lw=0.7, ls=(0, (4, 2)), zorder=4)
+                ax.text((hours[m].min() + hours[m].max()) / 2, 3.2e4, name, ha="center", fontsize=6.5)
         ax.set_title(title)
         ax.set_xlabel("hour of day (UTC)")
-        ax.grid(axis="y", color="#e6e6e6", lw=0.5)
+        ax.grid(axis="y", color="#dddddd", lw=0.5)
         ax.set_axisbelow(True)
     axes[0].set_ylabel("flows per 10 min (symlog)")
     axes[0].set_ylim(0, 6e4)
     handles, labels_ = axes[1].get_legend_handles_labels()
     fig.legend(handles, labels_, loc="lower center", ncol=10, frameon=False, bbox_to_anchor=(0.5, -0.02),
-               handlelength=1.0, columnspacing=0.8)
+               handlelength=1.4, handleheight=1.0, columnspacing=0.8)
+    for h in fig.legends[0].legend_handles:
+        if hasattr(h, "set_linewidth") and not hasattr(h, "get_xdata"):
+            h.set_linewidth(0.4)
     fig.subplots_adjust(left=0.07, right=0.995, top=0.9, bottom=0.3)
-    fig.savefig(figdir / "fig2_timeline.png", dpi=300)
+    fig.savefig(figdir / "fig2_timeline.png", dpi=300, metadata={"Software": None})
     plt.close(fig)
 
     # single-feature probes ---------------------------------------------------
@@ -1069,17 +1070,19 @@ def make_figures(work, results, figdir, classes, diag, meta, gate_curves):
     names = [k.replace("probe__", "") + (" *" if k.startswith("probe__") else "") for k, _ in chosen]
     fig, ax = plt.subplots(figsize=(4.6, 3.3))
     y = np.arange(len(chosen))
-    ax.barh(y - 0.2, [v["binary_f1"] for _, v in chosen], height=0.38, color="#e15759", label="binary F1")
-    ax.barh(y + 0.2, [v["macro_f1"] for _, v in chosen], height=0.38, color="#4e79a7", label="ten-class macro-F1")
+    ax.barh(y - 0.2, [v["binary_f1"] for _, v in chosen], height=0.38, color="#4d4d4d", edgecolor="black",
+            linewidth=0.4, label="binary F1")
+    ax.barh(y + 0.2, [v["macro_f1"] for _, v in chosen], height=0.38, color="white", edgecolor="black",
+            linewidth=0.6, label="ten-class macro-F1")
     ax.set_yticks(y)
     ax.set_yticklabels(names, fontsize=6.2)
     ax.set_xlim(0, 1)
     ax.set_xlabel("test score of a depth-6 tree trained on one feature")
-    ax.grid(axis="x", color="#e6e6e6", lw=0.5)
+    ax.grid(axis="x", color="#dddddd", lw=0.5)
     ax.set_axisbelow(True)
-    ax.legend(loc="lower right", frameon=True, fontsize=6.5)
+    ax.legend(loc="lower right", frameon=True, fontsize=6.5, edgecolor="black", fancybox=False)
     fig.tight_layout()
-    fig.savefig(figdir / "fig3_single_feature.png", dpi=300)
+    fig.savefig(figdir / "fig3_single_feature.png", dpi=300, metadata={"Software": None})
     plt.close(fig)
 
     # context distributions of attacker hosts and other hosts ---------------------
@@ -1096,19 +1099,20 @@ def make_figures(work, results, figdir, classes, diag, meta, gate_curves):
         a, b = ctx[is_att, j], ctx[~is_att, j]
         lo, hi = np.percentile(np.concatenate([a, b]), [0.5, 99.5])
         bins = np.linspace(lo, hi if hi > lo else lo + 1, 40)
-        ax.hist(b, bins=bins, density=True, alpha=0.75, color="#76b7b2", label="other hosts")
-        ax.hist(a, bins=bins, density=True, alpha=0.7, color="#e15759", label="4 attack sources")
+        ax.hist(b, bins=bins, density=True, color="#bdbdbd", label="other hosts")
+        ax.hist(a, bins=bins, density=True, histtype="step", color="black", lw=0.9, label="4 attack sources")
         ax.set_xlabel(lab)
         ax.set_yticks([])
     axes.ravel()[0].legend(frameon=False, fontsize=6.5, loc="upper center")
     fig.tight_layout(pad=0.4)
-    fig.savefig(figdir / "fig4_context_separation.png", dpi=300)
+    fig.savefig(figdir / "fig4_context_separation.png", dpi=300, metadata={"Software": None})
     plt.close(fig)
 
     # gate value against host degree ------------------------------------------------
     fig, ax = plt.subplots(figsize=(4.6, 2.7))
     all_deg = np.concatenate([d for d, _ in gate_curves])
     edges = np.unique(np.round(np.logspace(0, np.log10(max(all_deg.max(), 10)) + 1e-9, 15)))
+    styles = [("o", "-"), ("s", "--"), ("^", ":"), ("D", "-."), ("v", (0, (5, 1.5, 1, 1.5, 1, 1.5)))]
     for k, (dd, g) in enumerate(gate_curves):
         idx = np.digitize(dd, edges)
         xs, ys = [], []
@@ -1117,14 +1121,16 @@ def make_figures(work, results, figdir, classes, diag, meta, gate_curves):
             if m.sum() >= 20:
                 xs.append(np.median(dd[m]))
                 ys.append(g[m].mean())
-        ax.plot(xs, ys, marker="o", ms=2.5, lw=0.9, alpha=0.85, label="seed {}".format(k + 1))
+        mk, ls = styles[k % len(styles)]
+        ax.plot(xs, ys, marker=mk, ms=3, lw=0.8, ls=ls, color="black", markerfacecolor="white",
+                markeredgewidth=0.6, label="seed {}".format(k + 1))
     ax.set_xscale("log")
     ax.set_xlabel("flows of the host in the window (log scale)")
     ax.set_ylabel("mean gate value (weight on topology)")
-    ax.grid(color="#e6e6e6", lw=0.5)
-    ax.legend(fontsize=6, frameon=False, ncol=5, loc="upper center", bbox_to_anchor=(0.5, 1.13))
+    ax.grid(color="#dddddd", lw=0.5)
+    ax.legend(fontsize=6, frameon=False, ncol=5, loc="upper center", bbox_to_anchor=(0.5, 1.13), handlelength=2.6)
     fig.tight_layout()
-    fig.savefig(figdir / "fig5_gate_degree.png", dpi=300)
+    fig.savefig(figdir / "fig5_gate_degree.png", dpi=300, metadata={"Software": None})
     plt.close(fig)
     print("figures written to", figdir)
 

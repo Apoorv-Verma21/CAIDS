@@ -84,26 +84,30 @@ def window_counts(y, p, win, n_classes):
     return tp, pc, sc
 
 
-def macro_from_counts(tp, pc, sc):
+def macro_from_counts(tp, pc, sc, keep=None):
     tp, pc, sc = tp.sum(0), pc.sum(0), sc.sum(0)
     present = sc > 0
+    if keep is not None:
+        present &= keep
     f1 = np.where(pc + sc > 0, 2 * tp / np.maximum(pc + sc, 1e-12), 0.0)
     return float(f1[present].mean())
 
 
-def paired_gain(counts_a, counts_b, n_boot=2000, block=10, seed=0):
-    """Two-level bootstrap of mean(A seeds) - mean(B seeds): blocks of windows shared by both, seeds resampled."""
+def paired_gain(counts_a, counts_b, n_boot=2000, block=10, seed=0, keep=None):
+    """Two-level bootstrap of mean(A seeds) - mean(B seeds): blocks of windows shared by both, seeds resampled.
+    keep restricts the macro average to some classes (e.g. those present in both training sets)."""
     rng = np.random.default_rng(seed)
     n = counts_a[0][0].shape[0]
     starts_all = np.arange(max(n - block + 1, 1))
     nb = int(np.ceil(n / block))
-    point = (np.mean([macro_from_counts(*c) for c in counts_a]) - np.mean([macro_from_counts(*c) for c in counts_b]))
+    point = (np.mean([macro_from_counts(*c, keep=keep) for c in counts_a])
+             - np.mean([macro_from_counts(*c, keep=keep) for c in counts_b]))
     reps = []
     for _ in range(n_boot):
         idx = (rng.choice(starts_all, nb)[:, None] + np.arange(block)[None, :]).ravel()[:n]
         idx = idx[idx < n]
-        fa = [macro_from_counts(*(m[idx] for m in c)) for c in counts_a]
-        fb = [macro_from_counts(*(m[idx] for m in c)) for c in counts_b]
+        fa = [macro_from_counts(*(m[idx] for m in c), keep=keep) for c in counts_a]
+        fb = [macro_from_counts(*(m[idx] for m in c), keep=keep) for c in counts_b]
         reps.append(np.mean(rng.choice(fa, len(fa))) - np.mean(rng.choice(fb, len(fb))))
     lo, hi = np.percentile(reps, [2.5, 97.5])
     return float(point), float(lo), float(hi)
@@ -262,10 +266,19 @@ def main():
     for key_name in ("source address", "destination address", "address pair"):
         tab = pd.crosstab(key_of(key_name, tr_c), y[tr_c])
         major = tab.idxmax(axis=1)
-        pred = key_of(key_name, te_c).map(major).fillna(0).astype(int).to_numpy()
+        mapped = key_of(key_name, te_c).map(major)
+        pred = mapped.fillna(0).astype(int).to_numpy()
         yt = y[te_c].astype(int)
         audit["probe_" + key_name] = {"macro_f1": macro_f1(yt, pred, n_classes), "binary_f1": binary_f1(yt, pred),
                                       "fpr": float(((pred != 0) & (yt == 0)).sum() / max((yt == 0).sum(), 1))}
+        # the same lookup on the test flows whose key was seen in training, where it does not fall back to benign
+        seen = mapped.notna().to_numpy()
+        ys, ps = yt[seen], pred[seen]
+        audit["probe_" + key_name + " (seen)"] = {
+            "n_flows": int(seen.sum()), "share_of_test": float(seen.mean()),
+            "share_of_test_attacks": float(seen[yt != 0].mean()) if (yt != 0).any() else None,
+            "macro_f1": macro_f1(ys, ps, n_classes), "binary_f1": binary_f1(ys, ps),
+            "fpr": float(((ps != 0) & (ys == 0)).sum() / max((ys == 0).sum(), 1))}
     R["audit"] = audit
     R["audit_split"] = args.base
     print(json.dumps(audit, indent=1)[:1500], flush=True)
@@ -326,65 +339,73 @@ def main():
 
     from sklearn.ensemble import RandomForestClassifier
     from xgboost import XGBClassifier
-    models = {}
-    for (sp, sd), ids in need.items():
-        X = X_all[np.searchsorted(all_needed, ids)]
-        Y = y[ids].astype(int)
-        for name in args.models:
-            if name == "random_forest":
-                mdl = RandomForestClassifier(n_estimators=200, class_weight="balanced_subsample", n_jobs=-1,
-                                             random_state=sd)
-                mdl.fit(X, Y)
-            else:
-                present = np.unique(Y)
-                remap = {c: i for i, c in enumerate(present)}
-                w = len(Y) / (len(present) * np.bincount(Y, minlength=n_classes)[Y])
-                mdl = XGBClassifier(n_estimators=200, max_depth=6, learning_rate=0.2, subsample=0.8,
-                                    colsample_bytree=0.8, tree_method="hist", n_jobs=-1, random_state=sd)
-                mdl.fit(X, np.array([remap[v] for v in Y]), sample_weight=w)
-                mdl.present_ = present
-            models[(sp, sd, name)] = mdl
-        print("trained", sp, sd, "after {:.0f}s".format(time.perf_counter() - t0), flush=True)
-    del X_all
 
-    # ------------------------------------------------------------ predict every test flow of every split (pass 3)
+    def train(sp, sd, name, X, Y):
+        if name == "random_forest":
+            mdl = RandomForestClassifier(n_estimators=200, class_weight="balanced_subsample", n_jobs=-1,
+                                         random_state=sd)
+            mdl.fit(X, Y)
+        else:
+            present = np.unique(Y)
+            remap = {c: i for i, c in enumerate(present)}
+            w = len(Y) / (len(present) * np.bincount(Y, minlength=n_classes)[Y])
+            mdl = XGBClassifier(n_estimators=200, max_depth=6, learning_rate=0.2, subsample=0.8,
+                                colsample_bytree=0.8, tree_method="hist", n_jobs=-1, random_state=sd)
+            mdl.fit(X, np.array([remap[v] for v in Y]), sample_weight=w)
+            mdl.present_ = present
+        return mdl
+
+    # ------------------------------------------------------------ train and predict one split at a time (pass 3 per
+    # split), so only the ten models of one split are held in memory
     test_ids = {sp: np.flatnonzero(split[sp] == 2) for sp in SP}
-    preds = {k: np.zeros(len(test_ids[k[0]]), dtype="int16") for k in models}
-    pos_in_test = {sp: {} for sp in SP}
-    offset = 0
-    cursor = {sp: 0 for sp in SP}
-    for chunk in read_chunks(csv):
-        m = len(chunk)
-        x_all = None
-        for sp in SP:
-            ti = test_ids[sp]
-            lo = cursor[sp]
+    preds = {}
+    for sp in SP:
+        models = {}
+        for sd in args.seeds:
+            ids = need[(sp, sd)]
+            X = X_all[np.searchsorted(all_needed, ids)]
+            Y = y[ids].astype(int)
+            for name in args.models:
+                models[(sp, sd, name)] = train(sp, sd, name, X, Y)
+            del X
+            print("trained", sp, sd, "after {:.0f}s".format(time.perf_counter() - t0), flush=True)
+        for k in models:
+            preds[k] = np.zeros(len(test_ids[sp]), dtype="int16")
+        ti = test_ids[sp]
+        offset, cursor = 0, 0
+        for chunk in read_chunks(csv):
+            m = len(chunk)
             hi = np.searchsorted(ti, offset + m)
-            if hi > lo:
-                if x_all is None:
-                    x_all = chunk_features(chunk, feature_cols, proto_col)
-                xs = x_all[ti[lo:hi] - offset]
+            if hi > cursor:
+                xs = chunk_features(chunk.iloc[ti[cursor:hi] - offset], feature_cols, proto_col)
                 for (sp2, sd, name), mdl in models.items():
-                    if sp2 != sp:
-                        continue
                     p = mdl.predict(xs)
                     if name == "xgboost":
                         p = mdl.present_[p]
-                    preds[(sp2, sd, name)][lo:hi] = p
-                cursor[sp] = hi
-        offset += m
-    print("predictions done after {:.0f}s".format(time.perf_counter() - t0), flush=True)
+                    preds[(sp2, sd, name)][cursor:hi] = p
+                cursor = hi
+            offset += m
+        del models
+        print("predicted", sp, "after {:.0f}s".format(time.perf_counter() - t0), flush=True)
+    del X_all
 
     # ------------------------------------------------------------ scores, own test sets and shared flows
+    # classes with training flows in every split: a class absent from one training set (mitm under the blocked split)
+    # scores zero there by construction, so the gains are also reported without it
+    in_train = {sp: np.bincount(y[split[sp] == 0], minlength=n_classes) > 0 for sp in SP}
+    keep_all = np.logical_and.reduce([in_train[sp] for sp in SP])
+    R["classes_in_every_training_set"] = [c for c, k in zip(classes, keep_all) if k]
     res = {}
     for (sp, sd, name), p in preds.items():
         yt = y[test_ids[sp]].astype(int)
-        r_ = res.setdefault(name, {}).setdefault(sp, {"macro_f1": [], "attack_macro_f1": [], "binary_f1": []})
+        r_ = res.setdefault(name, {}).setdefault(sp, {"macro_f1": [], "attack_macro_f1": [], "binary_f1": [],
+                                                      "macro_f1_trained_classes": []})
         keep_att = np.ones(n_classes, bool)
         keep_att[0] = False
         r_["macro_f1"].append(macro_f1(yt, p, n_classes))
         r_["attack_macro_f1"].append(macro_f1(yt, p, n_classes, keep=keep_att))
         r_["binary_f1"].append(binary_f1(yt, p))
+        r_["macro_f1_trained_classes"].append(macro_f1(yt, p, n_classes, keep=keep_all))
     R["scores"] = res
     shared = {}
     for name in args.models:
@@ -402,9 +423,24 @@ def main():
             cb = [window_counts(yt, preds[(args.base, sd, name)][ib].astype(int), wc, n_classes)
                   for sd in args.seeds]
             d, lo, hi = paired_gain(ca, cb, n_boot=args.n_boot)
-            shared.setdefault(name, {})[sp] = {"delta": d, "ci": [lo, hi], "n_flows": int(len(common)),
-                                               "n_windows": int(len(np.unique(wc))),
-                                               "n_attack": int((yt != 0).sum())}
+            d2, lo2, hi2 = paired_gain(ca, cb, n_boot=args.n_boot, keep=keep_all)
+
+            def per_class(counts):
+                tp, pc, sc = (sum(c[i].sum(0) for c in counts) for i in range(3))
+                f1 = np.where(pc + sc > 0, 2 * tp / np.maximum(pc + sc, 1e-12), 0.0)
+                return {c: float(v) for c, v in zip(classes, f1)}
+
+            shared.setdefault(name, {})[sp] = {
+                "delta": d, "ci": [lo, hi], "n_flows": int(len(common)),
+                "n_windows": int(len(np.unique(wc))), "n_attack": int((yt != 0).sum()),
+                "delta_trained_classes": d2, "ci_trained_classes": [lo2, hi2],
+                "class_counts": {c: int((yt == i).sum()) for i, c in enumerate(classes)},
+                "macro_f1": {sp: float(np.mean([macro_from_counts(*c) for c in ca])),
+                             args.base: float(np.mean([macro_from_counts(*c) for c in cb]))},
+                "macro_f1_trained_classes": {sp: float(np.mean([macro_from_counts(*c, keep=keep_all) for c in ca])),
+                                             args.base: float(np.mean([macro_from_counts(*c, keep=keep_all)
+                                                                       for c in cb]))},
+                "class_f1": {sp: per_class(ca), args.base: per_class(cb)}}
     R["shared"] = shared
     R["base"] = args.base
     R["splits"] = list(SP)
