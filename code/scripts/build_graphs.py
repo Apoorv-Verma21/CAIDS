@@ -28,15 +28,7 @@ SESSION_GAP_SECONDS = 3600
 
 
 def session_split(window_ids, window_seconds, edge_window, labels, val_share, seed, val_unit="flows"):
-    """Train on the first capture session and test on all of the second. In
-    NF-UNSW-NB15-v3 every attack of session 1 falls in its first two hours, so
-    a final block of session 1 would hold no attack flows to select models on.
-    Validation is therefore a random share of session 1. With val_unit="flows"
-    it is a class-stratified share of the flows, which stay in their window
-    graphs as under the random flow split, so a validation flow can share its
-    window with training flows. With val_unit="windows" it is a share of whole
-    windows, drawn separately from the windows with and without attack flows,
-    so that no validation flow shares a window with a training flow."""
+    
     starts = np.asarray(window_ids, dtype="int64") * int(window_seconds)
     gaps = np.flatnonzero(np.diff(starts) > SESSION_GAP_SECONDS)
     if len(gaps) == 0:

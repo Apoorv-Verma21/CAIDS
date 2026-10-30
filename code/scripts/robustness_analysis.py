@@ -64,18 +64,19 @@ def make_seed_figure(V, root):
     plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman"], "font.size": 8,
                          "axes.labelsize": 8, "legend.fontsize": 6.5, "xtick.labelsize": 6.5, "ytick.labelsize": 7})
     fig, ax = plt.subplots(figsize=(4.6, 2.75))
-    # round 10: every run is coloured by the share of the victims' replies it labels as attacks, so the figure
-    # shows the failure as a continuum; crosses still mark the runs above the 50% rule
-    cmap = plt.get_cmap("plasma_r")
-    norm = matplotlib.colors.Normalize(vmin=0.0, vmax=1.0)
+    # round 10: every run is shaded by the share of the victims' replies it labels as attacks, so the figure
+    # shows the failure as a continuum; crosses still mark the runs above the 50% rule. Greyscale only
+    # (white = none of the replies, black = all of them); the square-root scale keeps shares of 10% to 50% visible.
+    cmap = plt.get_cmap("Greys")
+    norm = matplotlib.colors.PowerNorm(gamma=0.5, vmin=0.0, vmax=1.0)
     for x, (k, _) in enumerate(SEED_FIGURE_MODELS):
         f1s = np.asarray(V["_f1s_" + k])
         flag = V["_reply"][k]
         share = np.asarray(V["_reply_shares"][k])
         order = np.argsort(np.argsort(f1s))
         jitter = (order / max(len(f1s) - 1, 1) - 0.5) * 0.36
-        sc = ax.scatter(x + jitter[~flag], f1s[~flag], s=12, c=share[~flag], cmap=cmap, norm=norm, linewidths=0.3,
-                        edgecolors="#555555", zorder=3, label="run" if x == 0 else None)
+        sc = ax.scatter(x + jitter[~flag], f1s[~flag], s=12, c=share[~flag], cmap=cmap, norm=norm, linewidths=0.4,
+                        edgecolors="black", zorder=3, label="run" if x == 0 else None)
         if flag.any():
             ax.scatter(x + jitter[flag], f1s[flag], s=18, marker="x", c=share[flag], cmap=cmap, norm=norm,
                        linewidths=1.1, zorder=4, label="run above the 50% rule" if k == "b3" else None)
@@ -87,24 +88,25 @@ def make_seed_figure(V, root):
     ax.set_xticklabels([lab for _, lab in SEED_FIGURE_MODELS])
     ax.set_ylabel("test macro-F1 (chronological split)")
     ax.set_xlim(-0.6, len(SEED_FIGURE_MODELS) - 0.4)
-    ax.grid(axis="y", color="#e6e6e6", lw=0.5)
+    ax.grid(axis="y", color="#dddddd", lw=0.5)
     ax.set_axisbelow(True)
     leg = ax.legend(loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 1.0), handletextpad=0.3,
                     columnspacing=1.0)
     for h, t in zip(leg.legend_handles, leg.get_texts()):
         if t.get_text() == "run":
-            h.set_facecolor("#c8c8c8")
+            h.set_facecolor("white")
         elif t.get_text() == "median":
             h.set_color("black")
         elif "50%" in t.get_text():
-            h.set_color("#2c0d6b")
+            h.set_color("black")
     cb = fig.colorbar(sc, ax=ax, fraction=0.035, pad=0.015)
     cb.set_label("share of victims' replies\nlabelled as attacks", fontsize=6.5)
+    cb.set_ticks([0.0, 0.1, 0.25, 0.5, 0.75, 1.0])
     cb.ax.tick_params(labelsize=6)
     fig.tight_layout(pad=0.4)
     out = Path(root) / "paper" / "generated" / "figures" / "fig_seeds.png"
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, dpi=300)
+    fig.savefig(out, dpi=300, metadata={"Software": None})
     plt.close(fig)
     print("figure written to", out)
 
